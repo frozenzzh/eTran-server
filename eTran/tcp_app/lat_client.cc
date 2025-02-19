@@ -7,6 +7,7 @@
 #include <unordered_map>
 #include <algorithm>
 #include <cassert>
+#include <vector>
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/time.h>
