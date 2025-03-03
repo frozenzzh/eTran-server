@@ -19,8 +19,8 @@ extern class eTranTCP *etran_tcp;
 
 uint64_t next_tcp_cc_to_tsc = UINT64_MAX;
 // TODO: configure these parameters
-const unsigned int TCP_HANDSHAKE_TIMEOUT = 50; // ms
-const unsigned int TCP_CLOSE_TIMEOUT = 100;    // ms
+const unsigned int TCP_HANDSHAKE_TIMEOUT = 1000; // ms
+const unsigned int TCP_CLOSE_TIMEOUT = 1000;     // ms
 
 // this map includes all TCP connections of all states except for CONN_WAIT_RX_SYN
 std::unordered_map<struct flow_tuple, struct tcp_connection *, flow_tuple_hash, flow_tuple_equal> tcp_connections;
