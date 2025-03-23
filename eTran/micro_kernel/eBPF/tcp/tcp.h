@@ -1,7 +1,7 @@
 #pragma once
+#include <linux/types.h>
 #include <bpf/bpf_helpers.h>
 #include <linux/bpf.h>
-#include <linux/types.h>
 
 #include <intf/intf_ebpf.h>
 
