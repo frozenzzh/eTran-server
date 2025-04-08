@@ -34,8 +34,8 @@ public:
     /* NIC queue information */
     struct nic_queue_info _nic_queues[MAX_NIC_QUEUES];
 
-    /* available queue index, starts from zero */
-    std::vector<unsigned int> _available_qids;
+    /* qid => num of apps */
+    std::unordered_map<unsigned int, size_t> _available_qids;
     
     /* available keys in BPF_MAP_TYPE_XSKMAP, starts from zero */
     std::vector<int> _available_xsk_keys;
@@ -49,10 +49,9 @@ public:
         }
 
         memset(_nic_queues, 0, sizeof(_nic_queues));
-        _available_qids.resize(_num_queues);
         for (unsigned int i = 0; i < _num_queues; i++) {
             _nic_queues[i].qid = i;
-            _available_qids[i] = i;
+            _available_qids[i] = 0;
         }
 
         _available_xsk_keys.resize(MAX_XSK_FD);

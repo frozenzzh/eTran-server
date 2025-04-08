@@ -30,6 +30,13 @@ enum req_type {
     UNREG,
 };
 
+enum queue_usage_hint : uint32_t {
+    Q_EXCLUSIVE = 0,
+    Q_PREFER_EXCLUSIVE = 1,
+    Q_PREFER_SHARED = 2,
+    Q_LAST,
+};
+
 /* request format used for application request */
 struct register_request {
     /* request type */
@@ -40,6 +47,8 @@ struct register_request {
     unsigned int nr_nic_queues;
     /* the maximum number of threads application wants to use */
     unsigned int nr_app_threads;
+    /* allow applications to share the same queue or not */
+    queue_usage_hint queue_usage;
     /* networ address consists of IPv4 address and port number */
     struct eTran_netaddr addr;
 } __attribute__((packed));

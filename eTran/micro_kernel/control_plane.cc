@@ -453,7 +453,7 @@ static void free_app_resources(struct app_ctx *actx)
 
         unregister_slow_path_map(qid, actx->proto);
 
-        etran_nic->_available_qids.push_back(qid);
+        etran_nic->_available_qids[qid]--;
     }
 
     for (unsigned int i = 0; i < actx->nr_app_threads; i++)
@@ -704,6 +704,48 @@ err:
     return -ENOMEM;
 }
 
+static int try_allocate_queues(unsigned int nr_queues, queue_usage_hint hint, std::vector<unsigned int> &qids) {
+    qids.clear();
+    // Hi-prio
+    for (auto p : etran_nic->_available_qids) {
+        unsigned int qid = p.first;
+        size_t used_by = p.second;
+        if (used_by == 0) {
+            if (hint == Q_EXCLUSIVE || hint == Q_PREFER_EXCLUSIVE) {
+                qids.push_back(qid);
+            }
+        } else {
+            if (hint == Q_PREFER_SHARED) {
+                qids.push_back(qid);
+            }
+        }
+        if (qids.size() == nr_queues) {
+            break;
+        }
+    }
+    // Lo-prio
+    for (auto p : etran_nic->_available_qids) {
+        unsigned int qid = p.first;
+        size_t used_by = p.second;
+        if (used_by == 0) {
+            if (hint == Q_PREFER_SHARED) {
+                qids.push_back(qid);
+            }
+        } else {
+            if (hint == Q_PREFER_EXCLUSIVE) {
+                qids.push_back(qid);
+            }
+        }
+        if (qids.size() == nr_queues) {
+            break;
+        }
+    }
+    if (qids.size() != nr_queues) {
+        return -E2BIG;
+    }
+    return 0;
+}
+
 // step1: create a buffer pool and UMEM
 // step2: create slow-path XSKs and rings(rx,tx,fill,comp), bind them to the UMEM 
 // step3: create TX/RX XSKs (nr_nic_queues * nr_app_threads) step4:
@@ -717,13 +759,15 @@ static int alloc_app_resources(struct register_request &req, int fd)
     socklen_t optlen = sizeof(xdp_opts);
     int tran_idx;
 
-    if (req.nr_nic_queues > etran_nic->_available_qids.size() || req.nr_app_threads > MAX_APP_THREADS)
+    if (req.nr_app_threads > MAX_APP_THREADS)
     {
-        fprintf(stderr,
-                "alloc_app_resources: too many queues or threads, "
-                "etran_nic->_available_qids.size()=%zu\n",
-                etran_nic->_available_qids.size());
+        fprintf(stderr, "alloc_app_resources: too many threads");
         return -E2BIG;
+    }
+
+    if (int rc = try_allocate_queues(req.nr_nic_queues, req.queue_usage, qids)) {
+        fprintf(stderr, "alloc_app_resources: too many queues");
+        return rc;
     }
 
     if (req.nr_nic_queues * req.nr_app_threads + req.nr_nic_queues > etran_nic->_available_xsk_keys.size())
@@ -766,9 +810,7 @@ static int alloc_app_resources(struct register_request &req, int fd)
 
     for (unsigned int i = 0; i < req.nr_nic_queues; i++)
     {
-        unsigned int qid = etran_nic->_available_qids.front();
-        etran_nic->_available_qids.erase(etran_nic->_available_qids.begin());
-        qids.push_back(qid);
+        etran_nic->_available_qids[qids[i]]++;
     }
 
     for (unsigned int i = 0; i < req.nr_nic_queues; i++)
@@ -893,7 +935,7 @@ err:
         etran_nic->_nic_queues[qid].xsk_info = nullptr;
         etran_nic->_nic_queues[qid].bpw = nullptr;
         etran_nic->_nic_queues[qid].xsk_map_key = 0;
-        etran_nic->_available_qids.push_back(qid);
+        etran_nic->_available_qids[qid]--;
     }
 
     bp_free(&actx->bpw);

@@ -243,7 +243,7 @@ static int populate_fill_ring(void)
 /**
  * @brief allocate resources for this application process
  */
-static int resrouce_alloc(void)
+static int resource_alloc(void)
 {
     if (txrx_xsk_init())
         return -EIO;
@@ -411,6 +411,7 @@ int eTran_init(struct eTran_cfg *cfg)
     req.proto = cfg->proto;
     req.nr_nic_queues = cfg->nr_nic_queues;
     req.nr_app_threads = cfg->nr_app_threads;
+    req.queue_usage = cfg->queue_usage;
 
     if (write_all(actx->fd, &req, sizeof(req)) < 0)
         return -EIO;
@@ -501,7 +502,7 @@ int eTran_init(struct eTran_cfg *cfg)
     if (init_lrpc_channels(shm_lrpc_name, shm_lrpc_size))
         goto err;
 
-    if (resrouce_alloc())
+    if (resource_alloc())
         goto err;
 
     // XXX: I don't know why we need to kick the fill queue here
@@ -597,6 +598,7 @@ void pre_main(int argc, char *argv[])
     struct eTran_cfg cfg = {0};
     const char* nr_app_threads_env = std::getenv("ETRAN_NR_APP_THREADS");
     const char* nr_nic_queues_env = std::getenv("ETRAN_NR_NIC_QUEUES");
+    const char *allow_shared_queues_env = std::getenv("ETRAN_ALLOW_SHARED_QUEUES");
     const char* proto_env = std::getenv("ETRAN_PROTO");
 
     if (!proto_env) {
@@ -620,6 +622,15 @@ void pre_main(int argc, char *argv[])
             }
             cfg.nr_app_threads = std::stoi(nr_app_threads_env);
             cfg.nr_nic_queues = std::stoi(nr_nic_queues_env);
+            cfg.queue_usage = Q_EXCLUSIVE;
+            if (allow_shared_queues_env) {
+                auto v = std::stoul(allow_shared_queues_env);
+                if (v >= 0 && v < Q_LAST) {
+                    cfg.queue_usage = (queue_usage_hint)v;
+                } else {
+                    std::cerr << "Invalid queue usage hint: " << v << std::endl;
+                }
+            }
         }
     } catch (const std::invalid_argument& e) {
         std::cerr << "Invalid environment variable value: " << e.what() << std::endl;

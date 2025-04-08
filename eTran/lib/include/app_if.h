@@ -127,6 +127,7 @@ struct eTran_cfg
     int proto;
     unsigned int nr_nic_queues;
     unsigned int nr_app_threads;
+    queue_usage_hint queue_usage;
 };
 
 struct app_ctx_per_thread {
