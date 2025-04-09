@@ -46,10 +46,16 @@ static int init_step = 0;
 
 class eTranNIC *etran_nic;
 
+static constexpr unsigned DEFAULT_NUM_QUEUES = 20;
+static constexpr unsigned DEFAULT_NUM_SHARED_QUEUES = 0;
+static constexpr unsigned DEFAULT_QUEUE_LEN = 2048;
+static constexpr const char *DEFAULT_IF_NAME = "ens1f1np1";
+
 /* Global options */
-static std::string opt_if_name = "ens1f1np1";
-static unsigned int opt_num_queues = 20;
-static unsigned int opt_queue_len = 2048;
+static std::string opt_if_name = DEFAULT_IF_NAME;
+static unsigned int opt_num_queues = DEFAULT_NUM_QUEUES;
+static unsigned int opt_num_shared_queues = DEFAULT_NUM_SHARED_QUEUES;
+static unsigned int opt_queue_len = DEFAULT_QUEUE_LEN;
 static bool opt_napi_polling = true;
 static bool opt_socket_busy_poll = false;
 static bool opt_intr_affinity = true;
@@ -103,7 +109,7 @@ static int parse_mc_args(int argc, char *argv[])
     int opt;
     int ret = 0;
 
-    while ((opt = getopt(argc, argv, "q:i:l:g:nbhw:")) != -1)
+    while ((opt = getopt(argc, argv, "q:i:l:g:nbhw:Q:")) != -1)
     {
         switch (opt)
         {
@@ -118,6 +124,9 @@ static int parse_mc_args(int argc, char *argv[])
             break;
         case 'q':
             opt_num_queues = atoi(optarg);
+            break;
+        case 'Q':
+            opt_num_shared_queues = atoi(optarg);
             break;
         case 'i':
             opt_if_name = optarg;
@@ -141,19 +150,26 @@ static int parse_mc_args(int argc, char *argv[])
             break;
         case 'h':
         default:
-            fprintf(stderr,
-                    "Global options:\n"
-                    "\t[-h Help]\n"
-                    "\t[-n Disable NAPI polling], default: enable\n"
-                    "\t[-b Enable socket busy poll], default: disable\n"
-                    "\t[-g NIC queue length], default:2048\n"
-                    "\t[-q Number of NIC queues], default:1\n"
-                    "\t[-i Interface name], default: ens1f1np1\n"
-                    "\t[-p Transport protocol (tcp, homa)], default:tcp\n"
-                    "Homa options:\n"
-                    "\t[-w Workload type], default:5\n"
-                    "TCP options:\n"
-                    "\t[-l TCP buffer size], default:524288\n");
+            fprintf(
+                stderr,
+                "Global options:\n"
+                "\t[-h Help]\n"
+                "\t[-n Disable NAPI polling], default: enable\n"
+                "\t[-b Enable socket busy poll], default: disable\n"
+                "\t[-g NIC queue length], default:%u\n"
+                "\t[-q Number of NIC queues], default:%u\n"
+                "\t[-Q Number of shared NIC queues], default:%u\n"
+                "\t[-i Interface name], default: %s\n"
+                "\t[-p Transport protocol (tcp, homa)], default:tcp\n"
+                "Homa options:\n"
+                "\t[-w Workload type], default:5\n"
+                "TCP options:\n"
+                "\t[-l TCP buffer size], default:524288\n",
+                DEFAULT_QUEUE_LEN,
+                DEFAULT_NUM_QUEUES,
+                DEFAULT_NUM_SHARED_QUEUES,
+                DEFAULT_IF_NAME
+            );
             ret = -EINVAL;
             goto out;
         }
