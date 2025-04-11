@@ -266,8 +266,10 @@ static int resource_alloc(void)
     if (mempool_init())
         return -EIO;
 
-    if (populate_fill_ring())
-        return -EIO;
+    if (populate_fill_ring()) {
+        fprintf(stderr, "WARN: Fill ring populate failed...\n");
+        //return -EIO;
+    }
 #ifdef DEBUG
     printf("eTran_xsk_init(): populate_fill_ring() done\n");
 #endif
@@ -478,8 +480,10 @@ int eTran_init(struct eTran_cfg *cfg)
     printf("]\n");
 #endif
 
-    shm_bp_name = SHM_BP_PREFIX + std::to_string(getpid());
-    shm_umem_name = SHM_UMEM_PREFIX + std::to_string(getpid());
+    resp.shm_bp_name[SHM_NAME_MAX-1] = '\0';
+    shm_bp_name = resp.shm_bp_name;
+    resp.shm_umem_name[SHM_NAME_MAX-1] = '\0';
+    shm_umem_name = resp.shm_umem_name;
     shm_lrpc_name = SHM_LRPC_PREFIX + std::to_string(getpid());
 
 #ifdef DEBUG
@@ -646,9 +650,9 @@ void pre_main(int argc, char *argv[])
     if (cfg.proto == IPPROTO_HOMA)
         return;
 
-    if (eTran_init(&cfg))
+    if (auto rc = eTran_init(&cfg); rc != 0)
     {
-        std::cout << "eTran init failed." << std::endl;
+        std::cout << "eTran init failed: " << rc << std::endl;
         exit(EXIT_FAILURE);
     }
 }

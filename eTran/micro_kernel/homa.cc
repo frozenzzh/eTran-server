@@ -588,7 +588,11 @@ int poll_homa_to(void)
     {
         __u32 qid = *it;
         struct xsk_socket_info *xsk_info = etran_nic->_nic_queues[qid].xsk_info;
-        struct app_ctx *actx = etran_nic->_nic_queues[qid].actx;
+        if (unlikely(etran_nic->_nic_queues[qid].actxs.empty())) {
+            fprintf(stderr, "Should not happen (%s:%d)\n", __FILE__, __LINE__);
+            abort();
+        }
+        struct app_ctx *actx = etran_nic->_nic_queues[qid].actxs[0];
         struct xsk_ring_cons *cq = &actx->bpw.bp->cq[qid];
         spinlock_t *cq_lock = &actx->bpw.bp->cq_lock[qid];
 

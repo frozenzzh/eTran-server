@@ -28,7 +28,7 @@ struct shm_wrapper *_shm_wrapper_create(const std::string &__name, size_t __len,
     fd = shm_open(__name.c_str(), __oflag, __mode);
 
     if (fd < 0) {
-        fprintf(stderr, "Failed to open shared memory\n");
+        fprintf(stderr, "Failed to open shared memory %s (%s)\n", __name.c_str(), strerror(errno));
         goto err;
     }
 

@@ -17,7 +17,16 @@
 
 #define SHM_BP_PREFIX "BufferPool_"
 #define SHM_UMEM_PREFIX "UMEM_"
+#define SHM_BP_SR_PREFIX "BufferPool_Shared_"
+#define SHM_UMEM_SR_PREFIX "UMEM_Shared_"
 #define SHM_LRPC_PREFIX "LRPC_"
+#define SHM_NAME_MAX 31
+
+static_assert(sizeof(SHM_BP_PREFIX) < SHM_NAME_MAX, "");
+static_assert(sizeof(SHM_UMEM_PREFIX) < SHM_NAME_MAX, "");
+static_assert(sizeof(SHM_LRPC_PREFIX) < SHM_NAME_MAX, "");
+static_assert(sizeof(SHM_BP_SR_PREFIX) < SHM_NAME_MAX, "");
+static_assert(sizeof(SHM_UMEM_SR_PREFIX) < SHM_NAME_MAX, "");
 
 struct eTran_netaddr
 {
@@ -32,8 +41,7 @@ enum req_type {
 
 enum queue_usage_hint : uint32_t {
     Q_EXCLUSIVE = 0,
-    Q_PREFER_EXCLUSIVE = 1,
-    Q_PREFER_SHARED = 2,
+    Q_SHARED = 1,
     Q_LAST,
 };
 
@@ -70,6 +78,10 @@ struct register_response {
     size_t shm_umem_size;
 
     size_t shm_lrpc_size;
+
+    char shm_bp_name[SHM_NAME_MAX+1];
+
+    char shm_umem_name[SHM_NAME_MAX+1];
 
     struct buffer_pool_params bp_params;
 

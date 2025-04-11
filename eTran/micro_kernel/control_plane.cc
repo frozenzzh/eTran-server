@@ -17,6 +17,7 @@
 #include <sstream>
 #include <string>
 #include <mutex>
+#include <algorithm>
 
 #include <sys/epoll.h>
 #include <sys/ioctl.h>
@@ -64,8 +65,10 @@ static std::list<uint16_t> available_ports;
 static std::unordered_map<uint16_t, bool> port_is_available;
 static pthread_t micro_kernel_thread;
 
-std::set<uint16_t> rule_dst_ports;
-std::set<uint16_t> rule_src_ports;
+static std::unordered_map<uint16_t, app_ctx *> sport_to_actx,
+                                               dport_to_actx;
+
+static std::vector<app_ctx *> polled_actx;
 
 // micro_kernel.cc
 extern class eTranNIC *etran_nic;
@@ -242,13 +245,13 @@ int record_port(struct app_ctx *actx, uint16_t local_port, uint16_t remote_port)
     std::string res;
 
     /* only support TCP */
-    if (!remote_port && rule_dst_ports.find(local_port) == rule_dst_ports.end()){
+    if (!remote_port && dport_to_actx.find(local_port) == dport_to_actx.end()){
         cmd = "ethtool -U " + etran_nic->_if_name + " flow-type tcp4 dst-port " + std::to_string(local_port) + " context " + std::to_string(actx->rss_ctx_id);
-        rule_dst_ports.insert(local_port);
+        dport_to_actx[local_port] = actx;
     }
-    else if (rule_src_ports.find(remote_port) == rule_src_ports.end()){
+    else if (sport_to_actx.find(remote_port) == sport_to_actx.end()){
         cmd = "ethtool -U " + etran_nic->_if_name + " flow-type tcp4 src-port " + std::to_string(remote_port) + " context " + std::to_string(actx->rss_ctx_id);
-        rule_src_ports.insert(remote_port);
+        sport_to_actx[remote_port] = actx;
     }
     if (cmd.empty())
         return 0;
@@ -286,9 +289,9 @@ int unrecord_port(struct app_ctx *actx, uint16_t port)
         std::string res;
         cmd = "ethtool -U " + etran_nic->_if_name + " delete " + std::to_string(it->id);
         if (it->source)
-            rule_src_ports.erase(it->port);
+            sport_to_actx.erase(it->port);
         else
-            rule_dst_ports.erase(it->port);
+            dport_to_actx.erase(it->port);
         std::cout << cmd << std::endl;
         exec_cmd(cmd);
     }
@@ -441,6 +444,11 @@ static void free_app_resources(struct app_ctx *actx)
         if (!etran_nic->_nic_queues[qid].xsk_info)
             return;
 
+        if (etran_nic->_nic_queues[qid].is_shared) {
+            fprintf(stderr, "TODO: How to free a shared queue?\n");
+            return;
+        }
+
         epoll_ctl(xsk_epfd, EPOLL_CTL_DEL, xsk_socket__fd(etran_nic->_nic_queues[qid].xsk_info->xsk), nullptr);
 
         unregister_xsk_map(xsk_socket__fd(etran_nic->_nic_queues[qid].xsk_info->xsk), etran_nic->_nic_queues[qid].xsk_map_key, actx->proto);
@@ -453,7 +461,7 @@ static void free_app_resources(struct app_ctx *actx)
 
         unregister_slow_path_map(qid, actx->proto);
 
-        etran_nic->_available_qids[qid]--;
+        etran_nic->_free_exclusive_qids.push_back(qid);
     }
 
     for (unsigned int i = 0; i < actx->nr_app_threads; i++)
@@ -569,6 +577,8 @@ static void response_app_req(int app_fd, enum resp_type type)
         resp.shm_bp_size = actx->bpw.shm_bp->size;
         resp.shm_umem_size = actx->bpw.shm_umem->size;
         resp.shm_lrpc_size = actx->tctx[0].lrpc->size;
+        snprintf(resp.shm_bp_name, SHM_NAME_MAX, "%s", actx->bpw.shm_bp->name.c_str());
+        snprintf(resp.shm_umem_name, SHM_NAME_MAX, "%s", actx->bpw.shm_umem->name.c_str());
         resp.bp_params = actx->bpw.bp_params;
         resp.ifindex = if_nametoindex(etran_nic->_if_name.c_str());
         for (unsigned int i = 0; i < actx->nr_nic_queues; i++)
@@ -706,42 +716,28 @@ err:
 
 static int try_allocate_queues(unsigned int nr_queues, queue_usage_hint hint, std::vector<unsigned int> &qids) {
     qids.clear();
-    // Hi-prio
-    for (auto p : etran_nic->_available_qids) {
-        unsigned int qid = p.first;
-        size_t used_by = p.second;
-        if (used_by == 0) {
-            if (hint == Q_EXCLUSIVE || hint == Q_PREFER_EXCLUSIVE) {
-                qids.push_back(qid);
-            }
-        } else {
-            if (hint == Q_PREFER_SHARED) {
-                qids.push_back(qid);
-            }
+    switch (hint) {
+    case Q_EXCLUSIVE:
+        if (etran_nic->_free_exclusive_qids.size() < nr_queues) {
+            return -E2BIG;
         }
-        if (qids.size() == nr_queues) {
-            break;
+        for (unsigned int i=0; i<nr_queues; ++i) {
+            qids.push_back(etran_nic->_free_exclusive_qids.back());
+            etran_nic->_free_exclusive_qids.pop_back();
         }
-    }
-    // Lo-prio
-    for (auto p : etran_nic->_available_qids) {
-        unsigned int qid = p.first;
-        size_t used_by = p.second;
-        if (used_by == 0) {
-            if (hint == Q_PREFER_SHARED) {
-                qids.push_back(qid);
-            }
-        } else {
-            if (hint == Q_PREFER_EXCLUSIVE) {
-                qids.push_back(qid);
-            }
+        break;
+    case Q_SHARED:
+        // nr_queues is ignored here
+        // Shared apps share all queues
+        if (etran_nic->_num_shared_queues < nr_queues) {
+            return -E2BIG;
         }
-        if (qids.size() == nr_queues) {
-            break;
+        for (unsigned i=0; i<nr_queues; ++i) {
+            qids.push_back(etran_nic->_shared_qids[i]);
         }
-    }
-    if (qids.size() != nr_queues) {
-        return -E2BIG;
+        break;
+    default:
+        return -EINVAL;
     }
     return 0;
 }
@@ -765,8 +761,14 @@ static int alloc_app_resources(struct register_request &req, int fd)
         return -E2BIG;
     }
 
+    if (req.proto != IPPROTO_TCP) {
+        if (req.queue_usage != Q_EXCLUSIVE) {
+            fprintf(stderr, "Currently only TCP supports shared queues");
+        }
+    }
+
     if (int rc = try_allocate_queues(req.nr_nic_queues, req.queue_usage, qids)) {
-        fprintf(stderr, "alloc_app_resources: too many queues");
+        fprintf(stderr, "Too many queues (%s:%d)\n", __func__, __LINE__);
         return rc;
     }
 
@@ -801,48 +803,65 @@ static int alloc_app_resources(struct register_request &req, int fd)
     }
     printf("init_lrpc_channels success\n");
 
-    if (bp_init(&actx->bpw, actx->pid, SHM_BP_PREFIX, SHM_UMEM_PREFIX))
-    {
-        fprintf(stderr, "bp_init failed\n");
-        goto err;
-    }
-    printf("bp_init success\n");
+    actx->use_shared_queues = req.queue_usage == Q_SHARED;
 
-    for (unsigned int i = 0; i < req.nr_nic_queues; i++)
-    {
-        etran_nic->_available_qids[qids[i]]++;
+    if (actx->use_shared_queues && etran_nic->_shared_queues_ready) {
+        // Use shared BP
+        actx->bpw = *etran_nic->_shared_bpw;
+        printf("Reusing shared BP.\n");
+    } else {
+        // Create new BP
+        if (bp_init(&actx->bpw,
+                    actx->use_shared_queues ? getpid() : actx->pid,
+                    actx->use_shared_queues ? SHM_BP_SR_PREFIX : SHM_BP_PREFIX,
+                    actx->use_shared_queues ? SHM_UMEM_SR_PREFIX : SHM_UMEM_PREFIX))
+        {
+            fprintf(stderr, "bp_init failed\n");
+            goto err;
+        }
+        if (actx->use_shared_queues) {
+            etran_nic->_shared_bpw = &actx->bpw;
+            etran_nic->_shared_queues_ready = true;
+        }
+        printf("Created new BP.\n");
     }
 
     for (unsigned int i = 0; i < req.nr_nic_queues; i++)
     {
         unsigned int qid = qids[i];
+        auto &nicq = etran_nic->_nic_queues[qid];
 
-        etran_nic->_nic_queues[qid].actx = actx;
-        etran_nic->_nic_queues[qid].bpw = &actx->bpw;
-        etran_nic->_nic_queues[qid].xsk_info = xsk_configure_socket(&etran_nic->_nic_queues[qid], actx->proto);
+        bool new_ctrl_xsk = !nicq.xsk_info;
 
-        if (!etran_nic->_nic_queues[qid].xsk_info)
-        {
-            fprintf(stderr, "xsk_configure_socket failed for Queue#%d\n", qid);
-            goto err;
+        nicq.actxs.push_back(actx);
+        if (new_ctrl_xsk) {
+            // Initialize the XSK for control plane
+            nicq.bpw = &actx->bpw;
+            nicq.xsk_info = xsk_configure_socket(&nicq, actx->proto);
+            if (!nicq.xsk_info) {
+                fprintf(stderr, "xsk_configure_socket failed for Queue#%d\n", qid);
+                goto err;
+            }
         }
 
         actx->nic_qid[i] = qid;
 
         actx->qid2idx[qid] = i;
 
-        actx->umem_fd[i] = xsk_socket__fd(etran_nic->_nic_queues[qid].xsk_info->xsk);
+        actx->umem_fd[i] = xsk_socket__fd(nicq.xsk_info->xsk);
 
-        epoll_event ev = {};
-        ev.events = EPOLLIN | EPOLLERR;
-        ev.data.fd = xsk_socket__fd(etran_nic->_nic_queues[qid].xsk_info->xsk);
-        if (epoll_ctl(xsk_epfd, EPOLL_CTL_ADD, xsk_socket__fd(etran_nic->_nic_queues[qid].xsk_info->xsk), &ev))
-        {
-            fprintf(stderr, "epoll_ctl failed\n");
-            goto err;
+        if (new_ctrl_xsk) {
+            epoll_event ev = {};
+            ev.events = EPOLLIN | EPOLLERR;
+            ev.data.fd = xsk_socket__fd(nicq.xsk_info->xsk);
+            if (epoll_ctl(xsk_epfd, EPOLL_CTL_ADD, xsk_socket__fd(nicq.xsk_info->xsk), &ev))
+            {
+                fprintf(stderr, "epoll_ctl failed: %s\n", strerror(errno));
+                goto err;
+            }
         }
         /* Get UMEM id for this application */
-        if (getsockopt(xsk_socket__fd(etran_nic->_nic_queues[qid].xsk_info->xsk), SOL_XDP, XDP_OPTIONS, &xdp_opts, &optlen))
+        if (getsockopt(xsk_socket__fd(nicq.xsk_info->xsk), SOL_XDP, XDP_OPTIONS, &xdp_opts, &optlen))
             goto err;
         actx->umem_id = xdp_opts.umem_id;
     }
@@ -929,13 +948,20 @@ err:
     for (unsigned int i = 0; i < req.nr_nic_queues; i++)
     {
         unsigned int qid = qids[i];
+        if (etran_nic->_nic_queues[qid].is_shared) {
+            fprintf(stderr, "TODO: How to deal with a shared queue?\n");
+            continue;
+        }
         if (etran_nic->_nic_queues[qid].xsk_info)
             xsk_delete_socket(etran_nic->_nic_queues[qid].xsk_info);
-        etran_nic->_nic_queues[qid].actx = nullptr;
+        auto it = std::find(etran_nic->_nic_queues[qid].actxs.begin(), etran_nic->_nic_queues[qid].actxs.end(), actx);
+        if (it != etran_nic->_nic_queues[qid].actxs.end()) {
+            etran_nic->_nic_queues[qid].actxs.erase(it);
+        }
         etran_nic->_nic_queues[qid].xsk_info = nullptr;
         etran_nic->_nic_queues[qid].bpw = nullptr;
         etran_nic->_nic_queues[qid].xsk_map_key = 0;
-        etran_nic->_available_qids[qid]--;
+        etran_nic->_free_exclusive_qids.push_back(qid);
     }
 
     bp_free(&actx->bpw);
@@ -1445,57 +1471,10 @@ static struct nic_queue_info *find_nicq_with_fd(int fd)
     return nullptr;
 }
 
-static void process_packet(int xsk_fd)
+static void replenish_fill_ring(app_ctx *actx)
 {
-    unsigned int rcvd = 0;
-    unsigned int idx_rx = 0;
-    struct thread_bcache *bc;
-    struct app_ctx *actx;
-    struct nic_queue_info *nicq = find_nicq_with_fd(xsk_fd);
-    if (!nicq)
-        return;
+    struct thread_bcache *bc = &actx->iobuffer;
 
-    bc = &nicq->actx->iobuffer;
-    actx = nicq->actx;
-
-    struct xsk_socket_info *xsk_info = nicq->xsk_info;
-
-    rcvd = xsk_ring_cons__peek(&xsk_info->rx, IO_BATCH_SIZE, &idx_rx);
-    if (unlikely(!rcvd))
-        return;
-
-    for (unsigned int i = 0; i < rcvd; i++)
-    {
-        const struct xdp_desc *desc = xsk_ring_cons__rx_desc(&xsk_info->rx, idx_rx++);
-        uint64_t addr = desc->addr;
-
-        addr = xsk_umem__add_offset_to_addr(addr);
-        char *pkt = reinterpret_cast<char *>(xsk_umem__get_data(xsk_info->umem_area, addr));
-
-        // this packet is recevied from which queue
-        uint32_t qid = rxmeta_qid(pkt);
-        etran_nic->_nic_queues[qid].xsk_info->needfill++;
-#ifdef DEBUG_TCP
-        fprintf(stdout, "Receive from NAPI ID: %d\n", qid);
-#endif
-        // fprintf(stdout, "Receive from NAPI ID: %d\n", qid);
-        struct eth_hdr *eth = (struct eth_hdr *)pkt;
-        struct ip_hdr *ip = (struct ip_hdr *)(eth + 1);
-        if (ip->proto == IPPROTO_TCP)
-        {
-            tcp_packet(nicq->actx, (struct pkt_tcp *)pkt, qid);
-        }
-        else
-        {
-            fprintf(stderr, "Unknown protocol %d, pktlen=%u\n", ip->proto, desc->len);
-        }
-
-        thread_bcache_prod(bc, addr);
-    }
-
-    xsk_ring_cons__release(&xsk_info->rx, rcvd);
-
-    // replenish fill ring
     for (unsigned int i = 0; i < actx->nr_nic_queues; i++)
     {
         int qid = actx->nic_qid[i];
@@ -1526,6 +1505,89 @@ static void process_packet(int xsk_fd)
     }
 }
 
+static void process_packet(int xsk_fd)
+{
+    polled_actx.reserve(IO_BATCH_SIZE); // avoid reallocation
+    polled_actx.clear();
+    unsigned int rcvd = 0;
+    unsigned int idx_rx = 0;
+    struct nic_queue_info *nicq = find_nicq_with_fd(xsk_fd);
+    if (!nicq)
+        return;
+    bool is_shared = nicq->is_shared;
+
+    struct app_ctx *excl_actx = nullptr;
+    
+    if (!is_shared && !nicq->actxs.empty()) {
+        excl_actx = nicq->actxs[0];
+    }
+
+    struct xsk_socket_info *xsk_info = nicq->xsk_info;
+
+    rcvd = xsk_ring_cons__peek(&xsk_info->rx, IO_BATCH_SIZE, &idx_rx);
+    if (unlikely(!rcvd))
+        return;
+
+    for (unsigned int i = 0; i < rcvd; i++)
+    {
+        const struct xdp_desc *desc = xsk_ring_cons__rx_desc(&xsk_info->rx, idx_rx++);
+        uint64_t addr = desc->addr;
+
+        addr = xsk_umem__add_offset_to_addr(addr);
+        char *pkt = reinterpret_cast<char *>(xsk_umem__get_data(xsk_info->umem_area, addr));
+
+        // this packet is recevied from which queue
+        uint32_t qid = rxmeta_qid(pkt);
+        etran_nic->_nic_queues[qid].xsk_info->needfill++;
+#ifdef DEBUG_TCP
+        fprintf(stdout, "Receive from NAPI ID: %d\n", qid);
+#endif
+        // fprintf(stdout, "Receive from NAPI ID: %d\n", qid);
+        struct eth_hdr *eth = (struct eth_hdr *)pkt;
+        struct ip_hdr *ip = (struct ip_hdr *)(eth + 1);
+        auto tcp = (struct pkt_tcp *)pkt;
+        if (ip->proto == IPPROTO_TCP)
+        {
+            // Try to locate the actx
+            uint16_t sport = ntohs(tcp->tcp.src),
+                     dport = ntohs(tcp->tcp.dest);
+            app_ctx *actx = nullptr;
+            struct thread_bcache *bc = nullptr;
+            if (excl_actx) {
+                actx = excl_actx;
+            } if (auto it = dport_to_actx.find(dport);
+                it != dport_to_actx.end()) {
+                actx = it->second;
+            } else if (auto it = sport_to_actx.find(sport);
+                       it != sport_to_actx.end()) {
+                actx = it->second;
+            }
+            if (!actx) {
+                fprintf(stderr, "Could not locate actx for packet (sport=%u, dport=%u)\n", sport, dport);
+            } else {
+                bc = &actx->iobuffer;
+                tcp_packet(actx, tcp, qid);
+                thread_bcache_prod(bc, addr);
+                if (!actx->need_refill) {
+                    polled_actx.push_back(actx);
+                    actx->need_refill = true;
+                }
+            }
+        }
+        else
+        {
+            fprintf(stderr, "Unknown protocol %d, pktlen=%u\n", ip->proto, desc->len);
+        }
+    }
+
+    xsk_ring_cons__release(&xsk_info->rx, rcvd);
+
+    // replenish fill ring
+    for (auto actx : nicq->actxs) {
+        replenish_fill_ring(actx);
+    }
+}
+
 static int poll_network(int timeout_ms)
 {
     /* traverse all NIC queues */
@@ -1537,25 +1599,26 @@ static int poll_network(int timeout_ms)
         // reclaim completion buffers
         if (etran_nic->_nic_queues[i].xsk_info->outstanding)
         {
-            struct app_ctx *actx = etran_nic->_nic_queues[i].actx;
-            struct thread_bcache *bc = &actx->iobuffer;
-            // don't compete with fastpath
-            if (!spin_lock_try(&actx->bpw.bp->cq_lock[i]))
-                continue;
-            struct xsk_ring_cons *cq = &actx->bpw.bp->cq[i];
-            unsigned int idx_cq = 0;
-            unsigned int rcvd = xsk_ring_cons__peek(cq, etran_nic->_nic_queues[i].xsk_info->outstanding, &idx_cq);
-            for (unsigned int j = 0; j < rcvd; j++)
-            {
-                uint64_t addr = *xsk_ring_cons__comp_addr(cq, idx_cq++);
-                thread_bcache_prod(bc, addr);
+            for (auto actx : etran_nic->_nic_queues[i].actxs) {
+                struct thread_bcache *bc = &actx->iobuffer;
+                // don't compete with fastpath
+                if (!spin_lock_try(&actx->bpw.bp->cq_lock[i]))
+                    continue;
+                struct xsk_ring_cons *cq = &actx->bpw.bp->cq[i];
+                unsigned int idx_cq = 0;
+                unsigned int rcvd = xsk_ring_cons__peek(cq, etran_nic->_nic_queues[i].xsk_info->outstanding, &idx_cq);
+                for (unsigned int j = 0; j < rcvd; j++)
+                {
+                    uint64_t addr = *xsk_ring_cons__comp_addr(cq, idx_cq++);
+                    thread_bcache_prod(bc, addr);
+                }
+                if (rcvd)
+                {
+                    xsk_ring_cons__release(cq, rcvd);
+                    etran_nic->_nic_queues[i].xsk_info->outstanding -= rcvd;
+                }
+                spin_unlock(&actx->bpw.bp->cq_lock[i]);
             }
-            if (rcvd)
-            {
-                xsk_ring_cons__release(cq, rcvd);
-                etran_nic->_nic_queues[i].xsk_info->outstanding -= rcvd;
-            }
-            spin_unlock(&actx->bpw.bp->cq_lock[i]);
         }
     }
 

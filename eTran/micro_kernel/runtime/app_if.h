@@ -63,12 +63,17 @@ struct app_ctx
     // if we have allocated resources for this application
     bool done;
 
+    // used in process_packet()
+    bool need_refill = false;
+
     std::set<uint16_t> ports;
 
     std::vector<struct fd_rule_t> flow_director_rules;
 
     // application's per-thread context in kernel
     struct app_ctx_per_thread tctx[MAX_APP_THREADS];
+
+    bool use_shared_queues;
 
     // UMEM id
     int umem_id;

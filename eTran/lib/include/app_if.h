@@ -250,7 +250,7 @@ struct app_ctx {
             tctx[i].actx = this;
             tctx[i].evfd = -1;
         }
-        bpw = {0};
+        bpw = {};
     }
 
     // destructor

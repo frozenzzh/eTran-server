@@ -12,6 +12,8 @@
 #include <runtime/defs.h>
 #include <runtime/tcp.h>
 
+#include <vector>
+
 // copy from libxdp
 struct xdp_program
 {
@@ -102,12 +104,13 @@ struct xsk_socket_info
 
 struct nic_queue_info
 {
-    unsigned int qid;
-    struct xsk_socket_info *xsk_info;
-    int xsk_map_key;
-    struct buffer_pool_wrapper *bpw;
+    unsigned int qid = 0;
+    bool is_shared = false;
+    struct xsk_socket_info *xsk_info = nullptr;
+    int xsk_map_key = 0;
+    struct buffer_pool_wrapper *bpw = nullptr;
 
-    struct app_ctx *actx;
+    std::vector<struct app_ctx *> actxs;
 };
 
 void xsk_delete_socket(struct xsk_socket_info *xsk_info);

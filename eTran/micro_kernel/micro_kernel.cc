@@ -238,7 +238,17 @@ int main(int argc, char *argv[])
     printf("[Step%d] System init done.\n", ++init_step);
 
     /* initialize NIC */
-    etran_nic = new eTranNIC(opt_if_name, opt_num_queues, opt_queue_len, opt_napi_polling, opt_socket_busy_poll, opt_intr_affinity, opt_coalescing);
+    eTranNIC_init_params params = {
+        .if_name = opt_if_name,
+        .num_queues = opt_num_queues,
+        .num_shared_queues = opt_num_shared_queues,
+        .queue_len = opt_queue_len,
+        .napi_polling = opt_napi_polling,
+        .socket_busy_poll = opt_socket_busy_poll,
+        .intr_affinity = opt_intr_affinity,
+        .coalescing = opt_coalescing,
+    };
+    etran_nic = new eTranNIC(params);
     printf("[Step%d] NIC init done.\n", ++init_step);
 
     /* initialize microkernel context */
