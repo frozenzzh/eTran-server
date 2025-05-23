@@ -23,6 +23,7 @@
 unsigned int max_buf_size = 4096;
 int wait_seconds = 0;
 bool multiport = false;
+static bool dummy = false;
 bool dump_io_stats = false;
 bool short_response = true;
 unsigned int max_outstanding = 1;
@@ -69,6 +70,9 @@ struct connection {
 
 static inline int connection_send(unsigned int tid, struct connection *c)
 {
+    if ((dummy)) [[unlikely]] {
+        return 0;
+    }
     ssize_t ret;
     uint32_t target_bytes;
     int need_epoll_out = 0;
@@ -253,7 +257,7 @@ void thread_func(unsigned int tid)
 int parse_args(int argc, char *argv[])
 {
     int opt;
-    while ((opt = getopt(argc, argv, "t:q:f:b:i:p:so:mw:l:")) != -1) {
+    while ((opt = getopt(argc, argv, "t:q:f:b:i:p:so:mw:l:D")) != -1) {
         switch (opt) {
             case 'b':
                 message_bytes = std::stoi(optarg);
@@ -288,6 +292,9 @@ int parse_args(int argc, char *argv[])
             case 'm':
                 multiport = true;
                 break;
+            case 'D':
+                dummy = true;
+                break;
             case 'o':
                 max_outstanding = std::stoi(optarg);
                 break;
@@ -304,6 +311,7 @@ int parse_args(int argc, char *argv[])
                     " [-s enable short_response, default:true]" << 
                     " [-o max_outstanding, default:1]" <<
                     " [-m multiport, default:false]" << 
+                    " [-D dummy, default:false]" <<
                     " [-d dump_io_stats]" << std::endl;
                 return -1;
         }
