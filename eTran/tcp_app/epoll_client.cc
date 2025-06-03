@@ -332,6 +332,7 @@ int main(int argc, char *argv[])
     }
 
     std::thread([]() {
+        pid_t pid = getpid();
         while (1) {
             sleep(1);
             unsigned int _out = 0;
@@ -346,7 +347,8 @@ int main(int argc, char *argv[])
             total_out += _out;
             total_in += _in;
 
-            printf("Throughput In/Out(%.2f/%.2f Gbps)(%.2f Kops) conn#(%lu), avg_nr_events(%u), total_out(%luB), total_in(%luB)\n", 
+            printf("PID = %d: In/Out(%.2f/%.2f Gbps)(%.2f Kops) conn#(%lu), avg_nr_events(%u), total_out(%luB), total_in(%luB)\n",
+                pid,
                 _out * 8.0 / 1e9, _in * 8.0 / 1e9, _out / message_bytes / 1e3,
                 conn_fds.size(), avg_nr_events.load(), total_out, total_in);
         }
