@@ -173,7 +173,7 @@ void thread_func(unsigned int tid)
         close(fd);
         return;
     }
-    printf("Server thread#%u listen on %s:%d\n", tid, server_ip_str.c_str(), t_server_port);
+    printf("Server thread#%u (%u:%u) listen on %s:%d\n", tid, getpid(), gettid(), server_ip_str.c_str(), t_server_port);
 
     epfd = epoll_create1(0);
 

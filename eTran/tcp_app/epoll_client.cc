@@ -199,7 +199,7 @@ void thread_func(unsigned int tid)
         conn_fds_mtx.unlock();
     }
 
-    printf("Connected to %s:%d successfully, total connections (%u) on Thread#%u\n", server_ip_str.c_str(), t_server_port, t_nr_flows, tid);
+    printf("Connected to %s:%d; (%u) connections on Thread#%u (%d:%d)\n", server_ip_str.c_str(), t_server_port, t_nr_flows, tid, getpid(), gettid());
     
     mtx.lock();
     ready_threads++;
