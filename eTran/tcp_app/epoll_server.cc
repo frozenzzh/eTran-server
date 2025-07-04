@@ -315,18 +315,36 @@ int main(int argc, char *argv[])
             unsigned _out = 0;
 
             for (unsigned int i = 0; i < nr_threads; i++) {
-                _in += total_recv_bytes[i].load() - prev_total_recv_bytes[i];
-                _out += total_resp_bytes[i].load() - prev_total_resp_bytes[i];
+                uint64_t in_delta = total_recv_bytes[i].load() - prev_total_recv_bytes[i];
+                uint64_t out_delta = total_resp_bytes[i].load() - prev_total_resp_bytes[i];
+                        
                 prev_total_recv_bytes[i] = total_recv_bytes[i].load();
                 prev_total_resp_bytes[i] = total_resp_bytes[i].load();
+                        
+                _in += in_delta;
+                _out += out_delta;
+                        
+                printf("  Thread#%u: In/Out(%.2f/%.2f Gbps)(%.2f Kops)\n",
+                       i,
+                       in_delta * 8.0 / 1e9,
+                       out_delta * 8.0 / 1e9,
+                       in_delta / (double)message_bytes / 1e3);
             }
-            total_in += _in;
-            total_out += _out;
+            // 插入时间（仅 HH:MM:SS）
+            char time_buf[16];
+            time_t now = time(NULL);
+            strftime(time_buf, sizeof(time_buf), "%T", localtime(&now));  // 只显示时:分:秒
 
-            printf("PID = %d: In/Out(%.2f/%.2f Gbps)(%.2f Kops) conn#(%lu), avg_nr_events(%u), total_recv(%luB), total_resp(%luB)\n", 
-                pid,
-                _in * 8.0 / 1e9, _out * 8.0 / 1e9, _in / message_bytes / 1e3,
-                conn_fds.size(), avg_nr_events.load(), total_in, total_out);
+            // printf("[%s] PID = %d: In/Out(%.2f/%.2f Gbps)(%.2f Kops) conn#(%lu), avg_nr_events(%u), total_recv(%luB), total_resp(%luB)\n", 
+            //        time_buf,
+            //        pid,
+            //        _in * 8.0 / 1e9, _out * 8.0 / 1e9, _in / message_bytes / 1e3,
+            //        conn_fds.size(), avg_nr_events.load(), total_in, total_out);
+            printf("[%s] PID = %d: In/Out(%.2f/%.2f Gbps)(%.2f Kops)\n", 
+                   time_buf,
+                   pid,
+                   _in * 8.0 / 1e9, _out * 8.0 / 1e9, _in / message_bytes / 1e3);
+            fflush(stdout);
         }
     }).detach();
 

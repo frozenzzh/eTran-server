@@ -87,9 +87,21 @@ unsigned int data_bytes = 100;
 // FXIME: this is not used
 std::string server_ip_str = "192.168.6.2";
 uint16_t server_port = 50000;
+bool pin_core = false;
+int pined_core=0;
 
 void thread_func(unsigned int tid)
 {
+    if (pin_core) {
+        cpu_set_t cpuset;
+        CPU_ZERO(&cpuset);
+        CPU_SET(pined_core, &cpuset);
+        if (pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset) < 0) {
+            fprintf(stderr, "Failed to set thread affinity\n");
+            return;
+        }
+    }
+
     struct in_addr server_ip_addr;
     int newfd;
     
@@ -182,7 +194,7 @@ void thread_func(unsigned int tid)
 int parse_args(int argc, char *argv[])
 {
     int opt;
-    while ((opt = getopt(argc, argv, "t:q:f:b:i:p:")) != -1) {
+    while ((opt = getopt(argc, argv, "t:q:f:b:i:p:c:")) != -1) {
         switch (opt) {
             case 'b':
                 data_bytes = std::stoi(optarg);
@@ -197,6 +209,10 @@ int parse_args(int argc, char *argv[])
                 break;
             case 'd':
                 dump_io_stats = true;
+                break;
+            case 'c':
+                pin_core = true;
+                pined_core = std::stoi(optarg);
                 break;
             default:
                 std::cout << "Usage: " << argv[0] << 

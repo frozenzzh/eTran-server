@@ -1,0 +1,205 @@
+[Step1] System init done.
+[Step2] NIC init done.
+[Step3] Microkernel context init done.
+	TCP: Timing wheel init done.
+	Homa: Default workload type w5.
+[Step4] eBPF init done.
+[Step5] Threads init done.
+Unknown command: 
+Supported commands: exit, dump, kick
+Unknown command: 
+Supported commands: exit, dump, kick
+Unknown command: 
+Supported commands: exit, dump, kick
+Unknown command: 
+Supported commands: exit, dump, kick
+Unknown command: 
+Supported commands: exit, dump, kick
+Unknown command: 
+Supported commands: exit, dump, kick
+Unknown command: 
+Supported commands: exit, dump, kick
+Unknown command: 
+Supported commands: exit, dump, kick
+app->pid = 7166
+Accepted new app_fd: 120
+Receive REG command for app_fd:120
+init_lrpc_channels success
+Create shared memory for buffer pool success.
+Create shared memory for umem success.
+-----------------------BufferPool info-----------------------
+BufferPool total size: 		3148776
+bp->nr_slabs: 			32
+bp->nr_slabs_swap: 		64
+bp->nr_buffers: 		131072
+bp->nr_slabs_avail: 		32
+bp->nr_slabs_swap_avail: 	64
+-----------------------BufferPool info-----------------------
+Created new BP.
+libxdp: XDP_EGRESS(fd:35) enabled at ens1f1np1:19
+libxdp: XDP_GEN (fd:34) enabled at ens1f1np1:19
+init etran_nic->_nic_queues success
+init TX/RX XSKs success
+init UMEM and transport mapping success
+register XSK map for slowpath success
+register XSK map for application success
+req.nr_app_threads(4), req.nr_nic_queues(1)
+ethtool -X ens1f1np1 context new weight 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1
+Created RSS context: 5
+ethtool -U ens1f1np1 flow-type tcp4 dst-port 50000 context 5
+ethtool -U ens1f1np1 flow-type tcp4 dst-port 50001 context 5
+ethtool -U ens1f1np1 flow-type tcp4 dst-port 50002 context 5
+ethtool -U ens1f1np1 flow-type tcp4 dst-port 50003 context 5
+Unknown command: 
+Supported commands: exit, dump, kick
+Unknown command: 
+Supported commands: exit, dump, kick
+Unknown command: 
+Supported commands: exit, dump, kick
+Unknown command: 
+Supported commands: exit, dump, kick
+Unknown command: 
+Supported commands: exit, dump, kick
+Unknown command: 
+Supported commands: exit, dump, kick
+Unknown command: 
+Supported commands: exit, dump, kick
+Unknown command: 
+Supported commands: exit, dump, kick
+Unknown command: 
+Supported commands: exit, dump, kick
+Unknown command: 
+Supported commands: exit, dump, kick
+Unknown command: 
+Supported commands: exit, dump, kick
+Unknown command: 
+Supported commands: exit, dump, kick
+Unknown command: 
+Supported commands: exit, dump, kick
+Unknown command: 
+Supported commands: exit, dump, kick
+Unknown command: 
+Supported commands: exit, dump, kick
+Unknown command: 
+Supported commands: exit, dump, kick
+Unknown command: 
+Supported commands: exit, dump, kick
+Unknown command: 
+Supported commands: exit, dump, kick
+Unknown command: 
+Supported commands: exit, dump, kick
+Unknown command: 
+Supported commands: exit, dump, kick
+Unknown command: 
+Supported commands: exit, dump, kick
+Unknown command: 
+Supported commands: exit, dump, kick
+Unknown command: 
+Supported commands: exit, dump, kick
+Unknown command: 
+Supported commands: exit, dump, kick
+Unknown command: 
+Supported commands: exit, dump, kick
+Unknown command: 
+Supported commands: exit, dump, kick
+Unknown command: 
+Supported commands: exit, dump, kick
+Unknown command: 
+Supported commands: exit, dump, kick
+Unknown command: 
+Supported commands: exit, dump, kick
+Unknown command: 
+Supported commands: exit, dump, kick
+Unknown command: 
+Supported commands: exit, dump, kick
+Unknown command: 
+Supported commands: exit, dump, kick
+Unknown command: 
+Supported commands: exit, dump, kick
+Unknown command: 
+Supported commands: exit, dump, kick
+Unknown command: 
+Supported commands: exit, dump, kick
+Unknown command: 
+Supported commands: exit, dump, kick
+Unknown command: 
+Supported commands: exit, dump, kick
+Unknown command: 
+Supported commands: exit, dump, kick
+Unknown command: 
+Supported commands: exit, dump, kick
+Unknown command: 
+Supported commands: exit, dump, kick
+Unknown command: 
+Supported commands: exit, dump, kick
+Unknown command: 
+Supported commands: exit, dump, kick
+Unknown command: 
+Supported commands: exit, dump, kick
+Unknown command: 
+Supported commands: exit, dump, kick
+Unknown command: 
+Supported commands: exit, dump, kick
+Unknown command: 
+Supported commands: exit, dump, kick
+Unknown command: 
+Supported commands: exit, dump, kick
+Unknown command: 
+Supported commands: exit, dump, kick
+Unknown command: 
+Supported commands: exit, dump, kick
+Unknown command: 
+Supported commands: exit, dump, kick
+Unknown command: 
+Supported commands: exit, dump, kick
+Unknown command: 
+Supported commands: exit, dump, kick
+Unknown command: 
+Supported commands: exit, dump, kick
+Unknown command: 
+Supported commands: exit, dump, kick
+Unknown command: 
+Supported commands: exit, dump, kick
+Unknown command: 
+Supported commands: exit, dump, kick
+Unknown command: 
+Supported commands: exit, dump, kick
+Unknown command: 
+Supported commands: exit, dump, kick
+Unknown command: 
+Supported commands: exit, dump, kick
+Unknown command: 
+Supported commands: exit, dump, kick
+Send TCP_RST, 50003
+TCP connection (0x557ee353c620, 5) is closed
+Send TCP_RST, 50002
+TCP connection (0x557ee353c540, 5) is closed
+Send TCP_RST, 50000
+TCP connection (0x557ee353c380, 5) is closed
+ethtool -U ens1f1np1 delete 1019
+ethtool -U ens1f1np1 delete 1018
+ethtool -U ens1f1np1 delete 1017
+Wait for app exit timeout
+Ctrl+C pressed, exiting...
+Unknown command: 
+Supported commands: exit, dump, kick
+ethtool -U ens1f1np1 delete 1019
+rmgr: Cannot delete RX class rule: No such file or directory
+Cannot delete classification rule
+ethtool -U ens1f1np1 delete 1018
+rmgr: Cannot delete RX class rule: No such file or directory
+Cannot delete classification rule
+ethtool -U ens1f1np1 delete 1017
+rmgr: Cannot delete RX class rule: No such file or directory
+Cannot delete classification rule
+ethtool -U ens1f1np1 delete 1016
+Send TCP_RST, 50001
+TCP connection (0x557ee353c460, 5) is closed
+Destroy RSS context success: 5
+UMEM_7166 has been destroyed.
+BufferPool_7166 has been destroyed.
+LRPC_7166_0 has been destroyed.
+LRPC_7166_1 has been destroyed.
+LRPC_7166_2 has been destroyed.
+LRPC_7166_3 has been destroyed.
+Micro kernel exit.
