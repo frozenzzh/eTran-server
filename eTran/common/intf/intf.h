@@ -59,6 +59,8 @@ struct register_request {
     queue_usage_hint queue_usage;
     /* networ address consists of IPv4 address and port number */
     struct eTran_netaddr addr;
+
+    uint8_t tcp_type; // TCP type 0 for Latency, 1 for Throughput, 2 for Homa(useless)
 } __attribute__((packed));
 
 enum resp_type {

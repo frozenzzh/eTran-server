@@ -47,6 +47,14 @@
 #include "nic.h"
 
 #define TICK_US 1000
+#include <regex>      // std::regex、std::smatch、std::regex_search
+#include <fstream>    // std::ifstream
+#define latNum 1 //cores reserver for latency apps
+#define TCP_LATENCY 0
+#define TCP_THROUGHPUT 1
+#define COMP_BASE 1
+int nxtThroughputCore=0;
+int nxtLatencyCore=0;
 
 /* Unidx domain socket for application enrollment */
 int uds_sockfd;
@@ -312,6 +320,137 @@ static void destroy_rss_context(struct app_ctx *actx)
     actx->rss_ctx_id = 0;
 }
 
+/**
+ * 解析 /sys/class/net/<iface>/device -> 得到 PCI 地址 (形如 0000:03:00.1)
+ */
+static std::string get_pci_addr(const std::string& iface)
+{
+    std::string cmd = "ethtool -i " + iface + " 2>/dev/null";
+    FILE* fp = popen(cmd.c_str(), "r");
+    if (!fp) assert(0);
+
+    std::array<char, 256> buf;
+    std::string line, result;
+    while (fgets(buf.data(), buf.size(), fp)) {
+        line = buf.data();
+        // 可能格式： "bus-info: 0000:03:00.1\n"
+        if (line.rfind("bus-info:", 0) == 0) {
+            // 提取冒号后的内容
+            std::string bdf = line.substr(strlen("bus-info:"));            // 跳过 "bus-info"
+            // 去掉前导/尾随空白
+            auto l = std::find_if_not(bdf.begin(), bdf.end(), ::isspace);
+            auto r = std::find_if_not(bdf.rbegin(), bdf.rend(), ::isspace).base();
+            if (l < r) result.assign(l, r);
+            break;
+        }
+    }
+    pclose(fp);
+    return result;
+}
+
+/**
+ * 获取 网卡某队列 (qid, 0‑based) 对应的 IRQ 号
+ * @return 成功 → IRQ 号；失败 → -1
+ */
+static int get_irq_for_queue(const std::string& iface, int qid)
+{
+    std::string pci_str = get_pci_addr(iface);
+    /* comp<queue_id>@pci:<bdf> */
+    const std::string needle = "comp" + std::to_string(qid+COMP_BASE) + "@pci:" + pci_str;
+
+    /* 3. 打开 /proc/interrupts 并逐行扫描 */
+    std::ifstream fin("/proc/interrupts");
+    if (!fin) assert(0);
+
+    std::string line;
+    while (std::getline(fin, line)) {
+        /* —— 3‑1: 取该行最后一列（去掉多重空格） —— */
+        std::istringstream iss(line);
+        std::string tok, last_tok;
+        while (iss >> tok) last_tok = tok;      // 循环结束时 last_tok 为行尾单词
+
+        if (last_tok.find(needle) == std::string::npos) continue;
+
+        /* —— 3‑3: 解析 IRQ 号（行首第一列形如 "61:"） —— */
+        std::istringstream prefix(line);
+        std::string irq_field;
+        if (prefix >> irq_field && !irq_field.empty()) {
+            if (irq_field.back() == ':') irq_field.pop_back(); // 去掉冒号
+            try {
+                return std::stoi(irq_field);   // 转成整数后返回
+            } catch (...) {
+                assert(0);                     // 非法数字
+            }
+        }
+    }
+    /* 全文件都没找到 */
+    return -1;
+    
+}
+
+static void bind_rss_core(struct app_ctx *actx, unsigned int nr_nic_queues, std::vector<unsigned int> &qids) {
+
+    std::string cmd;
+    int cpu_count = sysconf(_SC_NPROCESSORS_ONLN);  // 获取 CPU 核心总数
+    int baseCore, mod;
+    if (actx->tcp_type == TCP_LATENCY) {
+        baseCore=cpu_count - latNum;
+        mod=latNum;
+        for (unsigned int i = 0; i < nr_nic_queues; i++) {
+            int qidx = qids[i];
+            int irq = get_irq_for_queue(etran_nic->_if_name, qidx);  // 需要实现
+            if (irq==-1) {
+                printf("Error, failed to find the IRQ for queue %d\n", qidx);
+                assert(0);
+            }
+            int target_cpu = baseCore + (nxtLatencyCore % mod);         // Round Robin
+            nxtLatencyCore++;
+
+            unsigned long mask = 1UL << target_cpu;
+            char mask_str[64];
+            snprintf(mask_str, sizeof(mask_str), "%lx", mask);
+
+            std::string irq_affinity_path = "/proc/irq/" + std::to_string(irq) + "/smp_affinity";
+            FILE *fp = fopen(irq_affinity_path.c_str(), "w");
+            if (fp) {
+                fprintf(fp, "%s\n", mask_str);
+                fclose(fp);
+                printf("Latency: Queue %d (IRQ %d) bound to CPU %d\n", qidx, irq, target_cpu);
+            } else {
+                perror("Failed to set smp_affinity");
+            }
+        }
+    } else if (actx->tcp_type == TCP_THROUGHPUT) {
+        baseCore=0;
+        mod = cpu_count - latNum;
+        for (unsigned int i = 0; i < nr_nic_queues; i++) {
+            int qidx = qids[i];
+            int irq = get_irq_for_queue(etran_nic->_if_name, qidx);
+            if (irq==-1) {
+                printf("Error, failed to find the IRQ for queue %d\n", qidx);
+                assert(0);
+            }
+            int target_cpu = baseCore + (nxtThroughputCore % mod);
+            nxtThroughputCore++;
+
+            // 将 CPU ID 转换为 bitmask（简单场景）
+            unsigned long mask = 1UL << target_cpu;
+            char mask_str[64];
+            snprintf(mask_str, sizeof(mask_str), "%lx", mask);
+
+            std::string irq_affinity_path = "/proc/irq/" + std::to_string(irq) + "/smp_affinity";
+            FILE *fp = fopen(irq_affinity_path.c_str(), "w");
+            if (fp) {
+                fprintf(fp, "%s\n", mask_str);
+                fclose(fp);
+                printf("Throughput: Queue %d (IRQ %d) bound to CPU %d\n", qidx, irq, target_cpu);
+            } else {
+                perror("Failed to set smp_affinity");
+            }
+        }
+    }
+}
+
 static int create_rss_context(struct app_ctx *actx, unsigned int nr_nic_queues, std::vector<unsigned int> &qids)
 {
     std::string cmd;
@@ -357,7 +496,7 @@ static int create_rss_context(struct app_ctx *actx, unsigned int nr_nic_queues, 
         fprintf(stderr, "The required pattern was not found.\n");
         return -1;
     }
-
+    if (actx->proto==IPPROTO_TCP) bind_rss_core(actx,nr_nic_queues,qids);
     return 0;
 }
 
@@ -795,6 +934,7 @@ static int alloc_app_resources(struct register_request &req, int fd)
     actx->proto = req.proto;
     actx->nr_nic_queues = req.nr_nic_queues;
     actx->nr_app_threads = req.nr_app_threads;
+    actx->tcp_type = req.tcp_type;
 
     if (init_lrpc_channels(actx, SHM_LRPC_PREFIX))
     {

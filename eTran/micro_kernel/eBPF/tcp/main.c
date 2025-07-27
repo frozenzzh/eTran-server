@@ -18,6 +18,18 @@
 char LICENSE[] SEC("license") = "GPL";
 
 #define XDP_EGRESS_DROP XDP_DROP
+// struct triplet {
+//     __u32 cpu;
+//     __u32 qid;
+//     __u32 port;
+// };
+
+// struct {
+//     __uint(type, BPF_MAP_TYPE_LRU_HASH);
+//     __uint(max_entries, 4096);          /* 够用即可，LRU 自动回收 */
+//     __type(key,   struct triplet);
+//     __type(value, __u8);                /* 只需要占位 */
+// } dedup SEC(".maps");
 
 // key: ctx->rx_queue_index
 // value: struct slow_path_info
@@ -347,6 +359,22 @@ int xdp_sock_prog(struct xdp_md *ctx)
     key.remote_port = bpf_ntohs(tcph->source);
 
     c = bpf_map_lookup_elem(&bpf_tcp_conn_map, &key);
+
+    // struct triplet k = {
+    //     .cpu  = cpu,
+    //     .qid  = qid,
+    //     .port = key.local_port,
+    // };
+
+    // /* 查一查，看是否已经记录过 */
+    // if (!bpf_map_lookup_elem(&dedup, &k)) {
+    //     __u8 dummy = 1;                     /* 占位值 */
+    //     bpf_map_update_elem(&dedup, &k, &dummy, BPF_ANY);
+
+    //     /* 只在第一次遇到时真正打印 */
+    //     bpf_printk("CPU=%u QUEUE=%u port=%u\n", cpu, qid, k.port);
+    // }
+
     if (unlikely(!c)) {
         xdp_log_err("bpf_tcp_conn not found");
         return XDP_DROP;

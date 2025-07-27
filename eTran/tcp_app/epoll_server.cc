@@ -30,6 +30,8 @@ unsigned int nr_queues = 1;
 unsigned int message_bytes = 100;
 std::string server_ip_str = "192.168.6.2"; // FXIME: this is not used in this test
 uint16_t server_port = 50000;
+// int log_fd = -1;
+// const char *log_path = "cpu_usage.log";
 
 std::list<std::thread> threads;
 
@@ -142,6 +144,14 @@ static inline int connection_events(unsigned int tid, struct connection *c, uint
 
 void thread_func(unsigned int tid)
 {
+
+    // if ((log_fd = open(log_path, O_WRONLY | O_APPEND | O_CREAT, 0644)) < 0) {
+    //     perror("open log file");
+    // }
+    // std::cout<< "Thread #" << tid << " started." << std::endl;
+    // static struct timespec last = {0};
+    // struct timespec now;
+
     int epfd;
     struct epoll_event ev, events[256];
     struct in_addr server_ip_addr;
@@ -239,6 +249,12 @@ void thread_func(unsigned int tid)
                 c->has_epoll_out = false;
             }
         }
+        // clock_gettime(CLOCK_MONOTONIC, &now);
+        // if (now.tv_sec != last.tv_sec || now.tv_nsec - last.tv_nsec > 500000000) { // 0.5s
+        //     int cpu = sched_getcpu();
+        //     dprintf(log_fd, "throughput pid=%d, tid=%d, cpu=%d\n", getpid(),tid,cpu);
+        //     last = now;
+        // }
 
     }
 
@@ -305,7 +321,7 @@ int main(int argc, char *argv[])
     for (unsigned int i = 0; i < nr_threads; i++) {
         threads.push_back(std::thread(thread_func, i));
     }
-
+    std::cout<<"reched here!!!"<<std::endl;
     std::thread([]() {
         pid_t pid = getpid();
         while (1) {

@@ -382,6 +382,7 @@ int eTran_init(struct eTran_cfg *cfg)
     actx->proto = cfg->proto;
     actx->nr_nic_queues = cfg->nr_nic_queues;
     actx->nr_app_threads = cfg->nr_app_threads;
+    actx->tcp_type=cfg->tcp_type;
 
     actx->fd = socket(AF_UNIX, SOCK_STREAM, 0);
     if (actx->fd < 0)
@@ -414,6 +415,12 @@ int eTran_init(struct eTran_cfg *cfg)
     req.nr_nic_queues = cfg->nr_nic_queues;
     req.nr_app_threads = cfg->nr_app_threads;
     req.queue_usage = cfg->queue_usage;
+    if (req.proto==IPPROTO_TCP)
+    {
+        req.tcp_type = cfg->tcp_type;
+    } else {
+        req.tcp_type = ETRAN_HOMA; // Homa does not use tcp_type
+    }
 
     if (write_all(actx->fd, &req, sizeof(req)) < 0)
         return -EIO;
@@ -604,6 +611,7 @@ void pre_main(int argc, char *argv[])
     const char* nr_nic_queues_env = std::getenv("ETRAN_NR_NIC_QUEUES");
     const char *allow_shared_queues_env = std::getenv("ETRAN_ALLOW_SHARED_QUEUES");
     const char* proto_env = std::getenv("ETRAN_PROTO");
+    const char* proto_env_usage = std::getenv("ETRAN_TCP_TYPE");
 
     if (!proto_env) {
         std::cerr << "Environment variables ETRAN_PROTO (tcp/TCP, homa/HOMA) must be set." << std::endl;
@@ -627,6 +635,14 @@ void pre_main(int argc, char *argv[])
             cfg.nr_app_threads = std::stoi(nr_app_threads_env);
             cfg.nr_nic_queues = std::stoi(nr_nic_queues_env);
             cfg.queue_usage = Q_EXCLUSIVE;
+            if (strcmp(proto_env_usage,"LATENCY") == 0) {
+                cfg.tcp_type = ETRAN_TCP_LATENCY;
+            } else if (strcmp(proto_env_usage,"THROUGHPUT") == 0) {
+                cfg.tcp_type = ETRAN_TCP_THROUGHPUT;
+            } else {
+                std::cerr << "Invalid TCP type: " << proto_env_usage << std::endl;
+                exit(EXIT_FAILURE);
+            }
             if (allow_shared_queues_env) {
                 auto v = std::stoul(allow_shared_queues_env);
                 if (v >= 0 && v < Q_LAST) {

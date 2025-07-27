@@ -13,6 +13,9 @@
 
 #include <unordered_map>
 #include <list>
+#define ETRAN_TCP_LATENCY 0
+#define ETRAN_TCP_THROUGHPUT 1
+#define ETRAN_HOMA 2
 
 constexpr unsigned int MAX_APP_THREADS = 20;
 
@@ -128,6 +131,7 @@ struct eTran_cfg
     unsigned int nr_nic_queues;
     unsigned int nr_app_threads;
     queue_usage_hint queue_usage;
+    uint8_t tcp_type;
 };
 
 struct app_ctx_per_thread {
@@ -223,6 +227,8 @@ struct app_ctx {
     unsigned int nr_app_threads;
 
     struct buffer_pool_wrapper bpw;
+    
+    uint8_t tcp_type;//tcp usage (latency or throughput), for performance isolation
 
     // constructor
     app_ctx() : fd(-1), done(false), nr_nic_queues(0), nr_app_threads(0)

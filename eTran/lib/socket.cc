@@ -37,6 +37,8 @@ static struct eTran_file_handle fds[MAX_FD] = {};
 static __thread struct eTrantcp_event events[256] = {};
 static __thread struct eTranhoma_event homa_events[256] = {};
 
+#define latNum 1 //cores reserved for tcp latency
+
 extern struct app_ctx_per_thread *eTran_get_tctx(void);
 
 static inline struct eTran_epoll *lookup_epoll_with_fd(int fd)
@@ -445,6 +447,45 @@ static int alloc_epoll_fd(struct eTran_epoll **ep, struct app_ctx_per_thread *tc
     return fd;
 }
 
+static void bind_core(struct app_ctx_per_thread *tctx)
+{
+    int cpu_count = sysconf(_SC_NPROCESSORS_ONLN);  // 获取 CPU 核心总数
+
+    if (cpu_count < latNum) {
+        fprintf(stderr, "CPU cores not enough for latency isolation\n");
+        exit(EXIT_FAILURE);
+    }
+
+    cpu_set_t cpuset;
+    CPU_ZERO(&cpuset);
+
+    if (tctx->actx->tcp_type == ETRAN_TCP_LATENCY) {
+        // latency 类型：可调度到最后 latNum 个 CPU 上
+        for (int i = cpu_count - latNum; i < cpu_count; ++i) {
+            CPU_SET(i, &cpuset);
+        }
+    } else if (tctx->actx->tcp_type == ETRAN_TCP_THROUGHPUT) {
+        // throughput 类型：可调度到前 cpu_count - latNum 个 CPU 上
+        for (int i = 0; i < cpu_count - latNum; ++i) {
+            CPU_SET(i, &cpuset);
+        }
+    }
+
+    // 设置当前线程亲和性
+    int rc = pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
+    if (rc != 0) {
+        perror("pthread_setaffinity_np failed");
+        exit(EXIT_FAILURE);
+    }
+    const char *log_path="/users/zhlin/eTran-priv/eTran/tcp_app/cpu_usage.log";
+    int log_fd=-1;
+     if ((log_fd = open(log_path, O_WRONLY | O_APPEND | O_CREAT, 0644)) < 0) {
+        perror("open log file");
+    }
+    dprintf(log_fd, "thread %d, tid %d, set core afffinity succ!\n", getpid(), tctx->tid);
+}
+
+
 static int alloc_socket_fd(void)
 {
     struct app_ctx_per_thread *tctx;
@@ -477,7 +518,7 @@ static int alloc_socket_fd(void)
         libc_close(fd);
         return -ENOMEM;
     }
-
+    bind_core(tctx);
     s->fd = fd;
     s->protocol = 0;
     s->tctx = tctx;

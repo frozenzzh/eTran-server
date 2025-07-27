@@ -1,0 +1,42 @@
+           <...>-209687  [004] ..s1. 542710.896849: bpf_trace_printk: CPU=4 QUEUE=15 port=30000
+
+          <idle>-0       [000] ..s2. 542710.917195: bpf_trace_printk: CPU=0 QUEUE=19 port=30001
+
+           <...>-209689  [003] ..s1. 542710.920477: bpf_trace_printk: CPU=3 QUEUE=16 port=30002
+
+           <...>-209681  [001] ..s1. 542710.924065: bpf_trace_printk: CPU=1 QUEUE=18 port=30003
+
+           <...>-209681  [001] ..s1. 542710.927640: bpf_trace_printk: CPU=1 QUEUE=18 port=30004
+
+           <...>-209684  [002] ..s1. 542710.931752: bpf_trace_printk: CPU=2 QUEUE=17 port=30005
+
+           <...>-209686  [000] ..s1. 542710.936000: bpf_trace_printk: CPU=0 QUEUE=19 port=30006
+
+    epoll_server-209687  [004] ..s1. 542710.939544: bpf_trace_printk: CPU=4 QUEUE=15 port=30007
+
+    epoll_server-209684  [002] ..s1. 542710.942594: bpf_trace_printk: CPU=2 QUEUE=17 port=30008
+
+    epoll_server-209689  [003] ..s1. 542710.946072: bpf_trace_printk: CPU=3 QUEUE=16 port=30009
+
+    epoll_server-210227  [007] ..s1. 542748.046903: bpf_trace_printk: CPU=7 QUEUE=12 port=40000
+
+    epoll_server-209687  [006] ..s1. 542748.070954: bpf_trace_printk: CPU=6 QUEUE=13 port=40001
+
+    epoll_server-210228  [009] ..s1. 542748.089972: bpf_trace_printk: CPU=9 QUEUE=10 port=40002
+
+    epoll_server-210231  [005] ..s1. 542748.101539: bpf_trace_printk: CPU=5 QUEUE=14 port=40003
+
+    epoll_server-210231  [005] ..s1. 542748.116139: bpf_trace_printk: CPU=5 QUEUE=14 port=40004
+
+    epoll_server-210228  [009] ..s1. 542748.132286: bpf_trace_printk: CPU=9 QUEUE=10 port=40005
+
+    epoll_server-209680  [009] ..s1. 542748.136513: bpf_trace_printk: CPU=9 QUEUE=10 port=40006
+
+            node-207911  [005] ..s1. 542748.139324: bpf_trace_printk: CPU=5 QUEUE=14 port=40007
+
+    epoll_server-209680  [009] ..s1. 542748.159767: bpf_trace_printk: CPU=9 QUEUE=10 port=40008
+
+    epoll_server-209689  [006] ..s1. 542748.225995: bpf_trace_printk: CPU=6 QUEUE=13 port=40009
+
+    micro_kernel-209574  [019] ..s11 542769.692870: bpf_trace_printk: CPU=19 QUEUE=9 port=50000
+

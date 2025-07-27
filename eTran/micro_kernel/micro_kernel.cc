@@ -48,7 +48,7 @@ class eTranNIC *etran_nic;
 
 static constexpr unsigned DEFAULT_NUM_QUEUES = 20;
 static constexpr unsigned DEFAULT_NUM_SHARED_QUEUES = 0;
-static constexpr unsigned DEFAULT_QUEUE_LEN = 2048;
+static constexpr unsigned DEFAULT_QUEUE_LEN = 8192;
 static constexpr const char *DEFAULT_IF_NAME = "ens1f1np1";
 
 /* Global options */

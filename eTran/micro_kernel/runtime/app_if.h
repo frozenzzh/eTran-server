@@ -98,6 +98,8 @@ struct app_ctx
 
     struct thread_bcache iobuffer;
 
+    int tcp_type;//TCP type 0 for Latency, 1 for Throughput
+
     app_ctx() {}
 };
 

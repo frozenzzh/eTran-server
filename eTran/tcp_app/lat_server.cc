@@ -89,9 +89,15 @@ std::string server_ip_str = "192.168.6.2";
 uint16_t server_port = 50000;
 bool pin_core = false;
 int pined_core=0;
+// int log_fd = -1;
+// const char *log_path = "cpu_usage.log";
 
 void thread_func(unsigned int tid)
 {
+    // if ((log_fd = open(log_path, O_WRONLY | O_APPEND | O_CREAT, 0644)) < 0) {
+    //     perror("open log file");
+    // }
+    // static struct timespec last = {0}, now;
     if (pin_core) {
         cpu_set_t cpuset;
         CPU_ZERO(&cpuset);
@@ -159,6 +165,12 @@ void thread_func(unsigned int tid)
             ;
         while (write(newfd, send_buf, data_bytes) < data_bytes)
             ;
+        // clock_gettime(CLOCK_MONOTONIC, &now);
+        // if (now.tv_sec != last.tv_sec || now.tv_nsec - last.tv_nsec > 500000000) { // 0.5s
+        //     int cpu = sched_getcpu();
+        //     dprintf(log_fd, "latency cpu=%d\n", cpu);
+        //     last = now;
+        // }
 
         // int nr_events = eTran_tcp_poll_events(tctx, events, 256, 0);
         // for (int i = 0; i < nr_events; i++) {
