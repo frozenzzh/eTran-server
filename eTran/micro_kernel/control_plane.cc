@@ -496,7 +496,9 @@ static int create_rss_context(struct app_ctx *actx, unsigned int nr_nic_queues, 
         fprintf(stderr, "The required pattern was not found.\n");
         return -1;
     }
+#ifdef ISOLATION
     if (actx->proto==IPPROTO_TCP) bind_rss_core(actx,nr_nic_queues,qids);
+#endif
     return 0;
 }
 
@@ -934,7 +936,9 @@ static int alloc_app_resources(struct register_request &req, int fd)
     actx->proto = req.proto;
     actx->nr_nic_queues = req.nr_nic_queues;
     actx->nr_app_threads = req.nr_app_threads;
+#ifdef ISOLATIOON
     actx->tcp_type = req.tcp_type;
+#endif
 
     if (init_lrpc_channels(actx, SHM_LRPC_PREFIX))
     {

@@ -518,7 +518,9 @@ static int alloc_socket_fd(void)
         libc_close(fd);
         return -ENOMEM;
     }
+#ifdef ISOLATION
     bind_core(tctx);
+#endif 
     s->fd = fd;
     s->protocol = 0;
     s->tctx = tctx;
