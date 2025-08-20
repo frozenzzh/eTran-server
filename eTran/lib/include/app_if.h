@@ -131,7 +131,7 @@ struct eTran_cfg
     unsigned int nr_nic_queues;
     unsigned int nr_app_threads;
     queue_usage_hint queue_usage;
-    uint8_t tcp_type;
+    int tcp_type;
 };
 
 struct app_ctx_per_thread {
@@ -228,7 +228,7 @@ struct app_ctx {
 
     struct buffer_pool_wrapper bpw;
     
-    uint8_t tcp_type;//tcp usage (latency or throughput), for performance isolation
+    int tcp_type;//tcp usage (latency or throughput), for performance isolation
 
     // constructor
     app_ctx() : fd(-1), done(false), nr_nic_queues(0), nr_app_threads(0)

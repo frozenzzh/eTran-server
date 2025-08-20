@@ -420,9 +420,15 @@ int eTran_init(struct eTran_cfg *cfg)
 #ifdef ISOLATION
     if (req.proto==IPPROTO_TCP)
     {
-        req.tcp_type = cfg->tcp_type;
+        if (cfg->tcp_type==ETRAN_TCP_LATENCY) {
+            req.tcp_type=LATENCY;
+        } else if (cfg->tcp_type==ETRAN_TCP_THROUGHPUT) {
+            req.tcp_type=THROUGHPUT;
+        } else {
+            assert(0);
+        }
     } else {
-        req.tcp_type = ETRAN_HOMA; // Homa does not use tcp_type
+        req.tcp_type = HOMA; // Homa does not use tcp_type
     }
 #endif
 
@@ -639,6 +645,7 @@ void pre_main(int argc, char *argv[])
             cfg.nr_nic_queues = std::stoi(nr_nic_queues_env);
             cfg.queue_usage = Q_EXCLUSIVE;
 #ifdef ISOLATION
+            std::cout<<"Perf Isolation enabled!"<<std::endl;
             const char* proto_env_usage = std::getenv("ETRAN_TCP_TYPE");
             if (strcmp(proto_env_usage,"LATENCY") == 0) {
                 cfg.tcp_type = ETRAN_TCP_LATENCY;

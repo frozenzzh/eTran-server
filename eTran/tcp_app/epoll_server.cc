@@ -252,7 +252,7 @@ void thread_func(unsigned int tid)
         // clock_gettime(CLOCK_MONOTONIC, &now);
         // if (now.tv_sec != last.tv_sec || now.tv_nsec - last.tv_nsec > 500000000) { // 0.5s
         //     int cpu = sched_getcpu();
-        //     dprintf(log_fd, "throughput pid=%d, tid=%d, cpu=%d\n", getpid(),tid,cpu);
+        //     dprintf(log_fd, "throughput port=%d, cpu=%d\n", t_server_port,cpu);
         //     last = now;
         // }
 

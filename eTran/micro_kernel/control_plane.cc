@@ -49,7 +49,7 @@
 #define TICK_US 1000
 #include <regex>      // std::regex、std::smatch、std::regex_search
 #include <fstream>    // std::ifstream
-#define latNum 1 //cores reserver for latency apps
+#define latNum 2 //cores reserver for latency apps, front half for XDP and back half for APP
 #define TCP_LATENCY 0
 #define TCP_THROUGHPUT 1
 #define COMP_BASE 1
@@ -391,16 +391,16 @@ static int get_irq_for_queue(const std::string& iface, int qid)
 static void bind_rss_core(struct app_ctx *actx, unsigned int nr_nic_queues, std::vector<unsigned int> &qids) {
 
     std::string cmd;
-    int cpu_count = sysconf(_SC_NPROCESSORS_ONLN);  // 获取 CPU 核心总数
+    int cpu_count = sysconf(_SC_NPROCESSORS_ONLN)-1;  // 获取 CPU 核心总数
     int baseCore, mod;
     if (actx->tcp_type == TCP_LATENCY) {
         baseCore=cpu_count - latNum;
-        mod=latNum;
+        mod=latNum/2;
         for (unsigned int i = 0; i < nr_nic_queues; i++) {
             int qidx = qids[i];
             int irq = get_irq_for_queue(etran_nic->_if_name, qidx);  // 需要实现
             if (irq==-1) {
-                printf("Error, failed to find the IRQ for queue %d\n", qidx);
+                std::cout<<"Error, failed to find the IRQ for queue "<< qidx << std::endl;
                 assert(0);
             }
             int target_cpu = baseCore + (nxtLatencyCore % mod);         // Round Robin
@@ -415,7 +415,7 @@ static void bind_rss_core(struct app_ctx *actx, unsigned int nr_nic_queues, std:
             if (fp) {
                 fprintf(fp, "%s\n", mask_str);
                 fclose(fp);
-                printf("Latency: Queue %d (IRQ %d) bound to CPU %d\n", qidx, irq, target_cpu);
+                std::cout<<"Latency: Queue "<< qidx << " (IRQ " << irq << ") bound to CPU " << target_cpu << std::endl;
             } else {
                 perror("Failed to set smp_affinity");
             }
@@ -427,7 +427,7 @@ static void bind_rss_core(struct app_ctx *actx, unsigned int nr_nic_queues, std:
             int qidx = qids[i];
             int irq = get_irq_for_queue(etran_nic->_if_name, qidx);
             if (irq==-1) {
-                printf("Error, failed to find the IRQ for queue %d\n", qidx);
+                std::cout<<"Error, failed to find the IRQ for queue "<< qidx << std::endl;
                 assert(0);
             }
             int target_cpu = baseCore + (nxtThroughputCore % mod);
@@ -443,7 +443,7 @@ static void bind_rss_core(struct app_ctx *actx, unsigned int nr_nic_queues, std:
             if (fp) {
                 fprintf(fp, "%s\n", mask_str);
                 fclose(fp);
-                printf("Throughput: Queue %d (IRQ %d) bound to CPU %d\n", qidx, irq, target_cpu);
+                std::cout<<"Throughput: Queue "<< qidx << " (IRQ " << irq << ") bound to CPU " << target_cpu << std::endl;
             } else {
                 perror("Failed to set smp_affinity");
             }
@@ -936,7 +936,7 @@ static int alloc_app_resources(struct register_request &req, int fd)
     actx->proto = req.proto;
     actx->nr_nic_queues = req.nr_nic_queues;
     actx->nr_app_threads = req.nr_app_threads;
-#ifdef ISOLATIOON
+#ifdef ISOLATION
     actx->tcp_type = req.tcp_type;
 #endif
 

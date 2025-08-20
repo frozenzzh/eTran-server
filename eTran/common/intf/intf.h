@@ -39,6 +39,12 @@ enum req_type {
     UNREG,
 };
 
+enum tcp_type {
+    LATENCY,
+    THROUGHPUT,
+    HOMA,
+};
+
 enum queue_usage_hint : uint32_t {
     Q_EXCLUSIVE = 0,
     Q_SHARED = 1,
@@ -60,7 +66,7 @@ struct register_request {
     /* networ address consists of IPv4 address and port number */
     struct eTran_netaddr addr;
 
-    uint8_t tcp_type; // TCP type 0 for Latency, 1 for Throughput, 2 for Homa(useless)
+    enum tcp_type tcp_type; // TCP type 0 for Latency, 1 for Throughput, 2 for Homa(useless)
 } __attribute__((packed));
 
 enum resp_type {

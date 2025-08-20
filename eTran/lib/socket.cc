@@ -37,7 +37,7 @@ static struct eTran_file_handle fds[MAX_FD] = {};
 static __thread struct eTrantcp_event events[256] = {};
 static __thread struct eTranhoma_event homa_events[256] = {};
 
-#define latNum 1 //cores reserved for tcp latency
+#define latNum 2 //cores reserved for tcp latency
 
 extern struct app_ctx_per_thread *eTran_get_tctx(void);
 
@@ -449,7 +449,7 @@ static int alloc_epoll_fd(struct eTran_epoll **ep, struct app_ctx_per_thread *tc
 
 static void bind_core(struct app_ctx_per_thread *tctx)
 {
-    int cpu_count = sysconf(_SC_NPROCESSORS_ONLN);  // 获取 CPU 核心总数
+    int cpu_count = sysconf(_SC_NPROCESSORS_ONLN)-1;  // 获取 CPU 核心总数
 
     if (cpu_count < latNum) {
         fprintf(stderr, "CPU cores not enough for latency isolation\n");
@@ -460,8 +460,8 @@ static void bind_core(struct app_ctx_per_thread *tctx)
     CPU_ZERO(&cpuset);
 
     if (tctx->actx->tcp_type == ETRAN_TCP_LATENCY) {
-        // latency 类型：可调度到最后 latNum 个 CPU 上
-        for (int i = cpu_count - latNum; i < cpu_count; ++i) {
+        // latency 类型：可调度到最后 ceil(latNum/2) 个 CPU 上
+        for (int i = cpu_count - (latNum-latNum/2); i < cpu_count; ++i) {
             CPU_SET(i, &cpuset);
         }
     } else if (tctx->actx->tcp_type == ETRAN_TCP_THROUGHPUT) {

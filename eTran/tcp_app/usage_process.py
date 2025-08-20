@@ -1,6 +1,6 @@
 
 from collections import defaultdict
-filePath = "/users/zhlin/eTran-priv/eTran/tcp_app/cpu_usage-no-isolation.log"
+filePath = "/users/zhlin/eTran-priv/eTran/tcp_app/cpu_usage.log"
 
 throughputMap=defaultdict(set)
 latencyCpus=set()
@@ -10,18 +10,17 @@ with open(filePath, 'r') as f:
         line = line.strip()
         if line.startswith("throughput"):
             parts = line.split()
-            pid=parts[1].split('=')[1].rstrip(',')
-            tid=parts[2].split('=')[1].rstrip(',')
-            cpu=parts[3].split('=')[1]
-            throughputMap[(pid,tid)].add(cpu)
+            port=parts[1].split('=')[1].rstrip(',')
+            cpu=parts[2].split('=')[1]
+            throughputMap[port].add(cpu)
         elif line.startswith("latency"):
             parts = line.split()
             cpu=parts[1].split('=')[1]
             latencyCpus.add(cpu)
 
 for key in sorted(throughputMap.keys()):
-    pid, tid = key
+    port = key
     cpus = sorted(throughputMap[key])
-    print(f"Throughput: pid={pid}, tid={tid}, cpus={','.join(cpus)}")
+    print(f"Throughput: port={port}, cpus={','.join(cpus)}")
 for cpu in sorted(latencyCpus):
     print(f"Latency: cpu={cpu}")
