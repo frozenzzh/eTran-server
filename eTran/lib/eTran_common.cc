@@ -18,9 +18,27 @@
 #include <xskbp/xsk_buffer_pool.h>
 #include <app_if.h>
 
+#include <dlfcn.h>
+#include <unistd.h>
+#include <stdio.h>
+
 static struct app_ctx *actx = nullptr;
 static std::mutex actx_lock;
 static unsigned int tctx_id = 0;
+#ifdef ALLOCATION
+    static struct tcpState {
+        int type;//0-LATENCY, 1-THROUGHPUT
+        int cpuLen;
+        int cpus[MAX_APP_THREADS+MAX_NIC_QUEUES];//表示当前APP分配到的CPU，pthread_create时利用这个来进行CPU亲和性设置
+        int guard_value;
+    } tcp_state;
+#endif
+
+
+#define INTERCEPT_FUNCTION(func) \
+libc_##func = (typeof(libc_##func)) dlsym(RTLD_NEXT, #func); \
+if (!libc_##func) \
+    fprintf(stderr, "Error in dlsym: %s\n", dlerror()); \
 
 static __thread struct app_ctx_per_thread *tctx;
 
@@ -46,6 +64,7 @@ extern int (*libc_epoll_ctl)(int epfd, int op, int fd,
                              struct epoll_event *event);
 extern int (*libc_epoll_wait)(int epfd, struct epoll_event *events,
                               int maxevents, int timeout);
+int (*libc_pthread_create)(pthread_t *thread, const pthread_attr_t *attr, void *(*start_routine)(void *), void *arg)=nullptr;
 
 /**
  * @brief initialize umem rings (Fill Ring and Completion Ring)
@@ -350,6 +369,64 @@ err:
     return -1;
 }
 
+#ifdef ALLOCATION
+extern "C" int pthread_create(pthread_t *thread, const pthread_attr_t *attr, void *(*start_routine)(void *), void *arg) {
+        std::cout<<"=============================================="<<std::endl;
+    auto now_us = []{ struct timeval tv; gettimeofday(&tv,nullptr);
+                  return tv.tv_sec*1000000ull + tv.tv_usec; };
+
+    std::cout<<"cpu size is "<<tcp_state.cpuLen<<std::endl;
+    for (int i=0; i<tcp_state.cpuLen; i++) {
+        std::cout<<tcp_state.cpus[i]<<" ";
+        if (i==tcp_state.cpuLen-1) std::cout<<std::endl;
+    }
+    cpu_set_t cpuSet;
+    CPU_ZERO(&cpuSet);
+    int cpu_count=sysconf(_SC_NPROCESSORS_ONLN)-1;
+    if (tcp_state.type==THROUGHPUT) {
+        for (int i = 0; i < cpu_count/2; ++i) {
+            CPU_SET(i, &cpuSet);
+        }
+        for (int i=0;i<tcp_state.cpuLen;i++) {
+            CPU_SET(tcp_state.cpus[i], &cpuSet);
+        }
+    } else if (tcp_state.type==LATENCY) {
+        for (int i = cpu_count/2 ; i < cpu_count/2+2; ++i) {
+            CPU_SET(i, &cpuSet);
+        }
+        for (int i=0;i<tcp_state.cpuLen;i++) {
+            CPU_SET(tcp_state.cpus[i], &cpuSet);
+        }
+    } else {
+        std::cout<<"Error, invalid tcp_type in pthread_create!"<<std::endl;
+        assert(0);
+    }
+
+    pthread_attr_t local_attr;
+    const pthread_attr_t* use_attr = attr;
+    bool created_attr = false;
+
+    if (use_attr == nullptr) {
+        pthread_attr_init(&local_attr);
+        use_attr = &local_attr;
+        created_attr = true;
+    }
+
+
+    int rc = pthread_attr_setaffinity_np((pthread_attr_t*)use_attr, sizeof(cpuSet), &cpuSet);
+    if (rc != 0) {
+        std::cout<<"Error pthread_attr_setaffinity_np failed!"<<std::endl;
+        assert(0);
+    }
+    int ret=libc_pthread_create(thread,use_attr,start_routine,arg);
+    if (ret!=0) {
+        std::cout<<"Error, libc_pthread_create failed!"<<std::endl;
+        assert(0);
+    }
+    if (created_attr) pthread_attr_destroy(&local_attr);
+    return ret;
+}
+#endif
 
 int eTran_init(struct eTran_cfg *cfg)
 {
@@ -382,8 +459,11 @@ int eTran_init(struct eTran_cfg *cfg)
     actx->proto = cfg->proto;
     actx->nr_nic_queues = cfg->nr_nic_queues;
     actx->nr_app_threads = cfg->nr_app_threads;
-#ifdef ISOLATION
+#if defined(ISOLATION) || defined(ALLOCATION)
     actx->tcp_type=cfg->tcp_type;
+    #ifdef ALLOCATION
+    tcp_state.type=cfg->tcp_type;
+    #endif
 #endif
 
     actx->fd = socket(AF_UNIX, SOCK_STREAM, 0);
@@ -417,7 +497,7 @@ int eTran_init(struct eTran_cfg *cfg)
     req.nr_nic_queues = cfg->nr_nic_queues;
     req.nr_app_threads = cfg->nr_app_threads;
     req.queue_usage = cfg->queue_usage;
-#ifdef ISOLATION
+#if defined(ISOLATION) || defined(ALLOCATION)
     if (req.proto==IPPROTO_TCP)
     {
         if (cfg->tcp_type==ETRAN_TCP_LATENCY) {
@@ -474,6 +554,17 @@ int eTran_init(struct eTran_cfg *cfg)
     if (read_all(actx->fd, &resp, sizeof(resp)) < 0 || resp.type != REG_DONE)
         return -EIO;
 
+#ifdef ALLOCATION
+    //TODO: 在这里注入pthread_create函数，使其只能被绑定到接收到的CPU上
+    tcp_state.cpuLen = resp.cpuLen;
+    for (int i=0; i<resp.cpuLen; i++) {
+        tcp_state.cpus[i] = resp.cpus[i];
+        std::cout<<"cpu "<<resp.cpus[i]<<" is pushed into tcp_state.cpus"<<std::endl;
+    }
+    for (int i=0; i<tcp_state.cpuLen; i++) {
+        std::cout<<"cpu "<<tcp_state.cpus[i]<<" is in tcp_state.cpus"<<std::endl;
+    }   
+#endif
     shm_bp_size = resp.shm_bp_size;
     shm_umem_size = resp.shm_umem_size;
     shm_lrpc_size = resp.shm_lrpc_size;
@@ -622,10 +713,20 @@ void pre_main(int argc, char *argv[])
     const char *allow_shared_queues_env = std::getenv("ETRAN_ALLOW_SHARED_QUEUES");
     const char* proto_env = std::getenv("ETRAN_PROTO");
 
+    // const char* nr_app_threads_env="5";
+    // const char* nr_nic_queues_env = "5";
+    // const char* proto_env ="tcp";
+    // const char *allow_shared_queues_env=NULL;
+
     if (!proto_env) {
         std::cerr << "Environment variables ETRAN_PROTO (tcp/TCP, homa/HOMA) must be set." << std::endl;
         exit(EXIT_FAILURE);
     }
+#ifdef ALLOCATION
+    INTERCEPT_FUNCTION(pthread_create);
+    tcp_state.type=2;
+    tcp_state.cpuLen=0;
+#endif
 
     try {
         if (std::string(proto_env) == "TCP" || std::string(proto_env) == "tcp")
@@ -644,9 +745,10 @@ void pre_main(int argc, char *argv[])
             cfg.nr_app_threads = std::stoi(nr_app_threads_env);
             cfg.nr_nic_queues = std::stoi(nr_nic_queues_env);
             cfg.queue_usage = Q_EXCLUSIVE;
-#ifdef ISOLATION
+#if defined(ISOLATION) || defined (ALLOCATION)
             std::cout<<"Perf Isolation enabled!"<<std::endl;
             const char* proto_env_usage = std::getenv("ETRAN_TCP_TYPE");
+            // const char* proto_env_usage = "THROUGHPUT";
             if (strcmp(proto_env_usage,"LATENCY") == 0) {
                 cfg.tcp_type = ETRAN_TCP_LATENCY;
             } else if (strcmp(proto_env_usage,"THROUGHPUT") == 0) {

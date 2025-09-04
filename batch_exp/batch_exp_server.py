@@ -7,6 +7,7 @@ import numpy as np
 # msgSizeList=[4000,32000]
 msgSizeList=[2000,4000,8000,16000,32000,64000,128000,256000,512000]
 outstandingLargeList=[1]
+expNum=10
 
 msgSizeSmallList=[2,4,8,16,32,64,128,512]
 outstandingSmallList=[64]
@@ -16,8 +17,7 @@ resultMulThread=[]
 
 currNum=4
 
-passwd="HRk3T7LWzE"
-sleepTimeSec=60
+sleepTimeSec=100
 topN=10#仅仅取前10个点的平均值
 
 def runRemote(msgSize, outstanding):
@@ -35,17 +35,17 @@ def runRemote(msgSize, outstanding):
         )
         remote_cmds.append("sleep 3")
     full_remote_cmd = "\n".join(remote_cmds)
-    os.system(f"sshpass -p '{passwd}' ssh -f zhlin@hp134.utah.cloudlab.us -p 22 '{full_remote_cmd}'")
+    os.system(f"ssh -f zhlin@hp123.utah.cloudlab.us -p 22 '{full_remote_cmd}'")
 
 def expClose():
     #client close
-    remoteCmdsClose = [f"echo {passwd} | sudo -S killall epoll_client", f"echo {passwd} | sudo -S killall -s SIGINT micro_kernel"]
+    remoteCmdsClose = [f"sudo -S killall epoll_client", f"sudo -S killall -s SIGINT micro_kernel"]
     fullRemoteCmdClose = " \n ".join(remoteCmdsClose)
-    os.system(f"sshpass -p '{passwd}' ssh zhlin@hp134.utah.cloudlab.us -p 22 '{fullRemoteCmdClose}'")
+    os.system(f" ssh zhlin@hp123.utah.cloudlab.us -p 22 '{fullRemoteCmdClose}'")
 
     #server close
-    os.system(f"echo {passwd} | sudo -S killall epoll_server")
-    os.system(f"echo {passwd} | sudo -S killall -s SIGINT micro_kernel")
+    os.system(f"sudo -S killall epoll_server")
+    os.system(f"sudo -S killall -s SIGINT micro_kernel")
     
     time.sleep(10)
 
@@ -189,12 +189,20 @@ def runExp(msgSize, outstanding):
     runExpMulThread(msgSize,outstanding)
 
 def runAndProcess(msgSizeList,outstandingList,type):
-    for msgSize in msgSizeList:
-        for outstanding in outstandingList:
-            print(f"run msgSize={msgSize}, outstanding={outstanding}")
-            runExp(msgSize, outstanding)
-            saveResults(msgSize,outstanding)
-    draw(msgSizeList, type)
+    for i in range(expNum):
+        log_path = "/users/zhlin/eTran-priv/batch_exp/metrics.log"
+        with open(log_path, "a", encoding="utf-8") as f:   # "a" 追加；改成 "w" 会覆盖
+            print(
+               f"==================={i}====================",
+               file=f
+            )
+        for msgSize in msgSizeList:
+            for outstanding in outstandingList:
+                print(f"run msgSize={msgSize}, outstanding={outstanding}")
+                runExp(msgSize, outstanding)
+                saveResults(msgSize,outstanding)
+        print("Exp {i}th finished")
+    # draw(msgSizeList, type)
 
 runAndProcess(msgSizeList, outstandingLargeList, "large")
 # runAndProcess(msgSizeSmallList, outstandingSmallList, "small")

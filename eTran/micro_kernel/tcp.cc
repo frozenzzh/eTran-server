@@ -7,6 +7,7 @@
 #include <base/ipc.h>
 #include <runtime/app_if.h>
 #include <runtime/ebpf_if.h>
+#include <algorithm>
 
 #include "trans_ebpf.h"
 #include "nic.h"
@@ -32,6 +33,14 @@ std::list<struct tcp_connection *> tcp_handshake_list;
 
 // ebpf.cc
 extern class eTranTCP *etran_tcp;
+
+//control_plane.cc
+#ifdef ALLOCATION
+extern std::vector<int> throughputCores;
+extern std::vector<int> latencyCores;
+extern std::set<int> availableCores;
+extern int cpuUseRef[MAX_CPU];
+#endif
 
 static inline int alloc_cc_idx(uint32_t *idx)
 {
@@ -1625,4 +1634,33 @@ void free_tcp_resources(struct app_ctx *actx)
     /* traverse tcp_connections and tcp_listeners and free them */
     free_connections(actx);
     free_listeners(actx);
+    #ifdef ALLOCATION
+    //TODO:遍历usedCores并更改引用计数，针对归零的CPU进行返回
+    int cpuNum=sysconf(_SC_NPROCESSORS_ONLN)-1;
+    for (auto cpu : actx->usedCores) {
+        if (cpu==cpuNum) {
+            std::cout<<"Error, the last core should not be allocated beacuse of micro_kernel!"<<std::endl;
+            assert(0);
+        }
+        cpuUseRef[cpu]--;
+        if (cpuUseRef[cpu] < 0) {
+            std::cout<<"Error, cpuUseRef["<<cpu<<"] is negative!"<<std::endl;
+            assert(0);
+        }
+        if (cpuUseRef[cpu] == 0) {//当前的CPU没有被使用了，需要视情况归还
+            if (cpu>=cpuNum/2+2) {//需要归还
+                std::cout<<"Retrun CPU << "<<cpu<<std::endl;
+                if (actx->tcp_type==THROUGHPUT) {
+                    throughputCores.erase(std::find(throughputCores.begin(), throughputCores.end(), cpu));
+                } else if (actx->tcp_type==LATENCY) {
+                    latencyCores.erase(std::find(latencyCores.begin(), latencyCores.end(), cpu));
+                } else {
+                    std::cout<<"Error, wrong tcp type in free_tcp_resources!!!"<<std::endl;
+                    assert(0);
+                }
+            }
+            availableCores.insert(cpu);
+        }
+    }
+    #endif
 }

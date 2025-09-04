@@ -7,7 +7,9 @@ LIBBPF_LIBXDP_DIR = $(LIB_DIR)/install/include
 COMMON_HDRS := ../common
 
 K_INCLUDE_DIR := -I./ -I$(COMMON_HDRS) -I$(LIBBPF_LIBXDP_DIR)
+# K_CFLAGS := -Wall  -fno-strict-aliasing -O3 -g -DALLOCATION
 K_CFLAGS := -Wall  -fno-strict-aliasing -O3 -g -DISOLATION
+# K_CFLAGS := -Wall  -fno-strict-aliasing -O3 -g
 K_LDLIBS := $(OBJECT_LIBXDP) $(OBJECT_LIBBPF) -lpthread -ltcmalloc -lrt -lelf -lz
 
 COMMON_DIR := ../common

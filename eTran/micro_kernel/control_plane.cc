@@ -41,6 +41,10 @@
 #include <runtime/tcp.h>
 #include <runtime/homa.h>
 #include <utils/utils.h>
+#include <list>
+#include <linux/fs.h>
+#include <fstream>
+#include <sstream>
 
 #include "ebpf.h"
 #include "trans_ebpf.h"
@@ -77,6 +81,27 @@ static std::unordered_map<uint16_t, app_ctx *> sport_to_actx,
                                                dport_to_actx;
 
 static std::vector<app_ctx *> polled_actx;
+#ifdef ALLOCATION
+static int latencyLoadThreshold=60;
+static int throughputLoadThreshold=80;
+static int nxtThroughputIdx=0, nxtLatencyIdx=0;
+std::vector<int> throughputCores;//因为需要进行round-robin来进行选择，所以使用vector
+std::vector<int> latencyCores;
+std::set<int> availableCores;
+int cpuUseRef[MAX_CPU]={0};
+static int cpuUsage[MAX_CPU]={0};//CPU利用率，80%在这里表示为80
+//默认前一半的CPU用于throughput，之后2个给latency，之后全部放入available中
+
+struct cpuOverheadInfo {
+    long long user;//normal processes executing in user mode
+    long long nice;//niced processes executing in user mode 
+    long long system;//processes executing in kernel mode
+    long long idle;//twiddling thumbs
+    long long iowait;//waiting for I/O to complete
+    long long irq;//servicing interrupts
+    long long softirq;//servicing softirqs
+};
+#endif
 
 // micro_kernel.cc
 extern class eTranNIC *etran_nic;
@@ -110,7 +135,7 @@ static int register_slow_path_map(unsigned int qid, int xsk_map_key, int proto);
 static void unregister_slow_path_map(unsigned int qid, int proto);
 
 /* manage RSS context for this application */
-static int create_rss_context(struct app_ctx *actx, unsigned int nr_nic_queues, std::vector<unsigned int> &qids);
+static int create_rss_context(struct app_ctx *actx, unsigned int nr_nic_queues, std::vector<unsigned int> &qids, unsigned int nr_app_threads);
 static void destroy_rss_context(struct app_ctx *actx);
 
 /* manage application resources */
@@ -320,6 +345,165 @@ static void destroy_rss_context(struct app_ctx *actx)
     actx->rss_ctx_id = 0;
 }
 
+#ifdef ALLOCATION
+// 读取 /proc/stat 的每核（cpu0..）计数，跳过汇总行 "cpu"
+static bool read_cpu_times(std::vector<cpuOverheadInfo> &out) {
+    std::ifstream fin("/proc/stat");
+    if (!fin) return false;
+
+    out.clear();
+    std::string line, label;
+    while (std::getline(fin, line)) {
+        if (line.rfind("cpu", 0) != 0) break;  // 非 cpu 开头的行，结束
+        std::istringstream iss(line);
+        iss >> label;
+        if (label == "cpu") continue;          // 跳过汇总
+
+        cpuOverheadInfo t;
+        // 依次读取 7 个字段（老内核只保证到 softirq；guest 等可忽略）
+        iss >> t.user >> t.nice >> t.system >> t.idle >> t.iowait >> t.irq >> t.softirq;
+        out.push_back(t);      
+    }
+    assert(out.size()==MAX_CPU);
+    return !out.empty();
+}
+
+static inline unsigned long long sum_all(const cpuOverheadInfo &x) {
+    return (unsigned long long)x.user + x.nice + x.system + x.idle +
+           x.iowait + x.irq + x.softirq;
+}
+
+static inline unsigned long long sum_idle(const cpuOverheadInfo &x) {
+    return (unsigned long long)x.idle + x.iowait; // 计算 idleAll
+}
+
+// 间隔 100ms 读取两次并计算每核使用率（百分数）
+static void get_cpu_overhead_info(void) {
+    std::vector<cpuOverheadInfo> a, b;
+    if (!read_cpu_times(a)) {
+        // 读取失败时安全置零
+        for (int i = 0; i < MAX_CPU; ++i) cpuUsage[i] = 0;
+        return;
+    }
+    usleep(100000);//等待100ms之后的下一次统计
+
+    if (!read_cpu_times(b)) {
+        for (int i = 0; i < MAX_CPU; ++i) cpuUsage[i] = 0;
+        return;
+    }
+    assert(a.size() == MAX_CPU);
+    assert(b.size() == MAX_CPU);
+    // 默认置零
+    for (int i = 0; i < MAX_CPU; ++i) cpuUsage[i] = 0;
+
+    for (size_t i = 0; i < MAX_CPU; ++i) {
+        unsigned long long ta = sum_all(a[i]);
+        unsigned long long tb = sum_all(b[i]);
+        unsigned long long ia = sum_idle(a[i]);
+        unsigned long long ib = sum_idle(b[i]);
+
+        unsigned long long dt = (tb > ta) ? (tb - ta) : 0ULL;
+        unsigned long long di = (ib > ia) ? (ib - ia) : 0ULL;
+
+        int percent = 0;
+        if (dt > 0) {
+            // 四舍五入到整数百分比
+            percent = (int)(( (dt - di) * 100ULL + dt/2 ) / dt);
+            if (percent < 0) percent = 0;
+            if (percent > 100) percent = 100;
+        }
+        cpuUsage[i] = percent;
+    }
+}
+
+int get_least_loaded_cpu(const std::set<int> *candidate, int *cpuId, int *cpuOverhead) {
+    int minLoad = 100;
+    for (int cpu : *candidate) {
+        if (cpuUsage[cpu] < minLoad) {
+            minLoad = cpuUsage[cpu];
+            *cpuId = cpu;
+            *cpuOverhead = minLoad;
+        }
+    }
+    return (minLoad < 100) ? 0 : -1;
+}
+
+int create_new_cpu(int type) {
+    std::vector<int> *replenish=nullptr;
+    if (type==LATENCY) {
+        replenish=&latencyCores;
+    } else if (type==THROUGHPUT) {
+        replenish=&throughputCores;
+    } else {
+        std::cout<<"Error wrong type in create_new_cpu()"<<std::endl;
+        assert(0);
+    }
+    if (availableCores.empty()) {
+        std::cout<<"Warning no available cores in create_new_cpu()"<<std::endl;
+        return -1;
+    } else {
+        int newCore=*availableCores.begin();
+        availableCores.erase(availableCores.begin());
+        replenish->push_back(newCore);
+        std::cout<<"Overload too high! Created new core: "<<newCore<<" for type "<<type<<std::endl;
+        return newCore;
+    }
+}
+
+int getCore(int type, bool alloc) {//遍历列表寻找最低负载的CPU，如果均为重载则生成一个新的CPU，只不过回收机制如何处理？？？
+    //这里要采用round-robin而不是直接选最低的，因为有可能一次性注册了10个thread，没有更新导致10个thread全部绑定到了同一个CPU上
+    //从nxtIdx开始寻找第一个负载低于thresh的，如果没有则额外生成一个CPU，并重置nxtIdx
+    int retCore=0,loadThresh;
+    std::vector<int> *candidate=nullptr;
+    int *nxtIdx;
+    if (type==LATENCY) {
+        candidate=&latencyCores;
+        loadThresh=latencyLoadThreshold;
+        nxtIdx=&nxtLatencyIdx;
+    } else if (type==THROUGHPUT) {
+        candidate=&throughputCores;
+        loadThresh=throughputLoadThreshold;
+        nxtIdx=&nxtThroughputIdx;
+    } else {
+        std::cout<<"Error wrong type in getCore()"<<std::endl;
+        assert(0);
+    }
+    //获取所有的CPU的利用率，结果保存在cpuUsage中
+    if (alloc==false) {//表示不强制要求新分配
+        get_cpu_overhead_info();
+        for (int i=0; i<candidate->size(); i++) {
+            if (cpuUsage[(*candidate)[(i+*nxtIdx)%candidate->size()]]<loadThresh) {
+                retCore=(*candidate)[(i+*nxtIdx)%candidate->size()];
+                *nxtIdx=(i+*nxtIdx+1)%candidate->size();
+                cpuUseRef[retCore]++;//这里由于所有的都最终被放到了usedCores中，所以累加多次反而没有影响
+                return retCore;
+            }
+        }
+        std::cout<<"Warning, type "<<type<<" overloaded, trying to allocate a new core"<<std::endl;
+        retCore = create_new_cpu(type);
+        if (retCore==-1) {//分配失败，直接找nxtIdx
+            retCore=(*candidate)[(*nxtIdx)%candidate->size()];
+            *nxtIdx=(*nxtIdx+1)%candidate->size();
+        } else {//分配成功
+            *nxtIdx=candidate->size()-1;//这个时候定位到最后一个用于分配
+        }
+        cpuUseRef[retCore]++;//设置引用计数，方便回收
+        return retCore;
+    } else {//强制要求新分配
+        retCore = create_new_cpu(type);
+        if (retCore==-1) {//分配失败，直接找nxtIdx
+            retCore=(*candidate)[(*nxtIdx)%candidate->size()];
+            *nxtIdx=(*nxtIdx+1)%candidate->size();
+        } else {//分配成功
+            *nxtIdx=candidate->size()-1;//这个时候定位到最后一个用于分配
+        }
+        cpuUseRef[retCore]++;//设置引用计数，方便回收
+        return retCore;
+    }
+}
+#endif
+
+#if defined(ISOLATION) || defined(ALLOCATION)
 /**
  * 解析 /sys/class/net/<iface>/device -> 得到 PCI 地址 (形如 0000:03:00.1)
  */
@@ -388,14 +572,16 @@ static int get_irq_for_queue(const std::string& iface, int qid)
     
 }
 
-static void bind_rss_core(struct app_ctx *actx, unsigned int nr_nic_queues, std::vector<unsigned int> &qids) {
+static void bind_rss_core(struct app_ctx *actx, unsigned int nr_nic_queues, std::vector<unsigned int> &qids, unsigned int nr_app_threads) {
 
     std::string cmd;
     int cpu_count = sysconf(_SC_NPROCESSORS_ONLN)-1;  // 获取 CPU 核心总数
     int baseCore, mod;
     if (actx->tcp_type == TCP_LATENCY) {
-        baseCore=cpu_count - latNum;
-        mod=latNum/2;
+        #ifdef ISOLATION
+            baseCore=cpu_count - latNum;
+            mod=latNum/2;
+        #endif
         for (unsigned int i = 0; i < nr_nic_queues; i++) {
             int qidx = qids[i];
             int irq = get_irq_for_queue(etran_nic->_if_name, qidx);  // 需要实现
@@ -403,8 +589,15 @@ static void bind_rss_core(struct app_ctx *actx, unsigned int nr_nic_queues, std:
                 std::cout<<"Error, failed to find the IRQ for queue "<< qidx << std::endl;
                 assert(0);
             }
+            #ifdef ALLOCATION
+            int target_cpu = getCore(LATENCY, true);         // 针对latency，优先进行分配；
+            actx->usedCores.push_back(target_cpu);
+            #endif
+
+            #ifdef ISOLATION
             int target_cpu = baseCore + (nxtLatencyCore % mod);         // Round Robin
             nxtLatencyCore++;
+            #endif
 
             unsigned long mask = 1UL << target_cpu;
             char mask_str[64];
@@ -420,9 +613,18 @@ static void bind_rss_core(struct app_ctx *actx, unsigned int nr_nic_queues, std:
                 perror("Failed to set smp_affinity");
             }
         }
+    #ifdef ALLOCATION
+        for (unsigned int i=0; i<actx->nr_app_threads;i++) {
+            int core=getCore(LATENCY,true);
+            actx->usedCores.push_back(core);
+        }
+    #endif
     } else if (actx->tcp_type == TCP_THROUGHPUT) {
+        #ifdef ISOLATION
         baseCore=0;
         mod = cpu_count - latNum;
+        #endif
+
         for (unsigned int i = 0; i < nr_nic_queues; i++) {
             int qidx = qids[i];
             int irq = get_irq_for_queue(etran_nic->_if_name, qidx);
@@ -430,8 +632,15 @@ static void bind_rss_core(struct app_ctx *actx, unsigned int nr_nic_queues, std:
                 std::cout<<"Error, failed to find the IRQ for queue "<< qidx << std::endl;
                 assert(0);
             }
+            #ifdef ALLOCATION
+            int target_cpu = getCore(THROUGHPUT,false);//针对throughput，等CPU负载变高之后再分配
+            actx->usedCores.push_back(target_cpu);
+            #endif
+
+            #ifdef ISOLATION
             int target_cpu = baseCore + (nxtThroughputCore % mod);
             nxtThroughputCore++;
+            #endif
 
             // 将 CPU ID 转换为 bitmask（简单场景）
             unsigned long mask = 1UL << target_cpu;
@@ -448,10 +657,17 @@ static void bind_rss_core(struct app_ctx *actx, unsigned int nr_nic_queues, std:
                 perror("Failed to set smp_affinity");
             }
         }
+        #ifdef ALLOCATION
+        for (int i=0; i<nr_app_threads; i++) {
+            int core = getCore(THROUGHPUT,false);//针对throughput，等CPU负载变高之后再分配
+            actx->usedCores.push_back(core);
+        }
+        #endif
     }
 }
+#endif
 
-static int create_rss_context(struct app_ctx *actx, unsigned int nr_nic_queues, std::vector<unsigned int> &qids)
+static int create_rss_context(struct app_ctx *actx, unsigned int nr_nic_queues, std::vector<unsigned int> &qids, unsigned int nr_app_threads)
 {
     std::string cmd;
     std::string res;
@@ -496,8 +712,8 @@ static int create_rss_context(struct app_ctx *actx, unsigned int nr_nic_queues, 
         fprintf(stderr, "The required pattern was not found.\n");
         return -1;
     }
-#ifdef ISOLATION
-    if (actx->proto==IPPROTO_TCP) bind_rss_core(actx,nr_nic_queues,qids);
+#if defined(ISOLATION) || defined(ALLOCATION)
+    if (actx->proto==IPPROTO_TCP) bind_rss_core(actx,nr_nic_queues,qids,nr_app_threads);
 #endif
     return 0;
 }
@@ -714,7 +930,7 @@ static void response_app_req(int app_fd, enum resp_type type)
         for (unsigned int i = 0; i < actx->nr_app_threads; i++)
             transfer_fd(app_fd, actx->tctx[i].evfd);
         break;
-    case REG_DONE:
+    case REG_DONE: {
         resp.shm_bp_size = actx->bpw.shm_bp->size;
         resp.shm_umem_size = actx->bpw.shm_umem->size;
         resp.shm_lrpc_size = actx->tctx[0].lrpc->size;
@@ -724,6 +940,15 @@ static void response_app_req(int app_fd, enum resp_type type)
         resp.ifindex = if_nametoindex(etran_nic->_if_name.c_str());
         for (unsigned int i = 0; i < actx->nr_nic_queues; i++)
             resp.nic_qid[i] = actx->nic_qid[i];
+        #ifdef ALLOCATION
+        resp.cpuLen=actx->usedCores.size();
+        int idx=0;
+        for (auto core : actx->usedCores) {
+            resp.cpus[idx] = core;
+            idx++;
+        };
+        #endif
+    }
     case REG_FAIL:
     case UNKNWON:
         resp.type = type;
@@ -936,8 +1161,11 @@ static int alloc_app_resources(struct register_request &req, int fd)
     actx->proto = req.proto;
     actx->nr_nic_queues = req.nr_nic_queues;
     actx->nr_app_threads = req.nr_app_threads;
-#ifdef ISOLATION
+#if defined(ISOLATION) || defined(ALLOCATION)
     actx->tcp_type = req.tcp_type;
+    #ifdef ALLOCATION
+    actx->usedCores = std::list<int>();
+    #endif
 #endif
 
     if (init_lrpc_channels(actx, SHM_LRPC_PREFIX))
@@ -1073,7 +1301,7 @@ static int alloc_app_resources(struct register_request &req, int fd)
     }
     printf("register XSK map for application success\n");
     printf("req.nr_app_threads(%u), req.nr_nic_queues(%u)\n", req.nr_app_threads, req.nr_nic_queues);
-    if (create_rss_context(actx, req.nr_nic_queues, qids))
+    if (create_rss_context(actx, req.nr_nic_queues, qids, req.nr_app_threads))
         goto err;
 
     if (thread_bcache_create(&actx->bpw, &actx->iobuffer))
@@ -1350,6 +1578,14 @@ int thread_init(void)
 {
     cpu_set_t cpu_set;
     uds_sockfd = init_uds_ctx();
+    #ifdef ALLOCATION
+    //TODO: 初始化可用的CPU池
+    int cpuNum=sysconf(_SC_NPROCESSORS_ONLN)-1;//micro_kernel thread所在的CPU不放入池子中
+    for (int i=0; i< cpuNum/2; i++) throughputCores.push_back(i);
+    for (int i=cpuNum/2; i< cpuNum/2+2; i++) latencyCores.push_back(i);
+    for (int i=cpuNum/2+2; i< cpuNum; i++) availableCores.insert(i);
+    for (int i=0; i<MAX_CPU; i++) cpuUseRef[i]=0;
+    #endif
 
     if (uds_sockfd < 0)
     {

@@ -340,11 +340,11 @@ int main(int argc, char *argv[])
                 _in += in_delta;
                 _out += out_delta;
                         
-                printf("  Thread#%u: In/Out(%.2f/%.2f Gbps)(%.2f Kops)\n",
-                       i,
-                       in_delta * 8.0 / 1e9,
-                       out_delta * 8.0 / 1e9,
-                       in_delta / (double)message_bytes / 1e3);
+                // printf("  Thread#%u: In/Out(%.2f/%.2f Gbps)(%.2f Kops)\n",
+                //        i,
+                //        in_delta * 8.0 / 1e9,
+                //        out_delta * 8.0 / 1e9,
+                //        in_delta / (double)message_bytes / 1e3);
             }
             // 插入时间（仅 HH:MM:SS）
             char time_buf[16];

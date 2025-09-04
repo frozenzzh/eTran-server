@@ -96,6 +96,11 @@ struct register_response {
     int ifindex;
 
     unsigned int nic_qid[MAX_NIC_QUEUES];
+
+    #ifdef ALLOCATION
+    int cpuLen;//针对throughput和latency的分配逻辑不一样
+    int cpus[MAX_NIC_QUEUES+20];//每一个网卡队列和
+    #endif
 } __attribute__((packed));
 
 #define MAX_MSG_SIZE 56

@@ -7,3 +7,110 @@ msgSize=64000, outstanding=1, throughputMulProc=18.035999999999998, throughputMu
 msgSize=128000, outstanding=1, throughputMulProc=18.740000000000002, throughputMulThread=18.831000000000003
 msgSize=256000, outstanding=1, throughputMulProc=17.588999999999995, throughputMulThread=17.797
 msgSize=512000, outstanding=1, throughputMulProc=19.113999999999997, throughputMulThread=18.895999999999997
+===================0====================
+===================0====================
+msgSize=2000, outstanding=1, throughputMulProc=0.0, throughputMulThread=0.0
+msgSize=4000, outstanding=1, throughputMulProc=0.0, throughputMulThread=0.0
+===================0====================
+===================0====================
+msgSize=2000, outstanding=1, throughputMulProc=1.9369999999999998, throughputMulThread=2.0279999999999996
+===================0====================
+msgSize=2000, outstanding=1, throughputMulProc=1.8699999999999999, throughputMulThread=1.832
+msgSize=4000, outstanding=1, throughputMulProc=3.579999999999999, throughputMulThread=2.0540000000000003
+msgSize=8000, outstanding=1, throughputMulProc=3.6399999999999997, throughputMulThread=3.6410000000000005
+msgSize=16000, outstanding=1, throughputMulProc=6.134000000000001, throughputMulThread=6.1209999999999996
+msgSize=32000, outstanding=1, throughputMulProc=5.5009999999999994, throughputMulThread=5.554999999999998
+msgSize=64000, outstanding=1, throughputMulProc=7.6530000000000005, throughputMulThread=7.664999999999999
+msgSize=128000, outstanding=1, throughputMulProc=10.725999999999999, throughputMulThread=10.861999999999998
+msgSize=256000, outstanding=1, throughputMulProc=14.572999999999999, throughputMulThread=14.517000000000001
+msgSize=512000, outstanding=1, throughputMulProc=17.584, throughputMulThread=17.59
+===================1====================
+msgSize=2000, outstanding=1, throughputMulProc=1.0999999999999999, throughputMulThread=1.09
+msgSize=4000, outstanding=1, throughputMulProc=2.0599999999999996, throughputMulThread=2.0599999999999996
+msgSize=8000, outstanding=1, throughputMulProc=3.6450000000000005, throughputMulThread=3.633
+msgSize=16000, outstanding=1, throughputMulProc=6.129, throughputMulThread=6.114
+msgSize=32000, outstanding=1, throughputMulProc=5.514999999999999, throughputMulThread=5.4990000000000006
+msgSize=64000, outstanding=1, throughputMulProc=7.661999999999999, throughputMulThread=7.633000000000001
+msgSize=128000, outstanding=1, throughputMulProc=10.793999999999999, throughputMulThread=10.811999999999998
+msgSize=256000, outstanding=1, throughputMulProc=14.475, throughputMulThread=19.159
+msgSize=512000, outstanding=1, throughputMulProc=18.482999999999997, throughputMulThread=17.622999999999998
+===================2====================
+msgSize=2000, outstanding=1, throughputMulProc=1.0999999999999999, throughputMulThread=1.09
+msgSize=4000, outstanding=1, throughputMulProc=2.069, throughputMulThread=2.069
+msgSize=8000, outstanding=1, throughputMulProc=3.6399999999999997, throughputMulThread=3.6420000000000003
+msgSize=16000, outstanding=1, throughputMulProc=5.57, throughputMulThread=6.122999999999999
+msgSize=32000, outstanding=1, throughputMulProc=5.507999999999999, throughputMulThread=5.531000000000001
+msgSize=64000, outstanding=1, throughputMulProc=7.696, throughputMulThread=7.6370000000000005
+msgSize=128000, outstanding=1, throughputMulProc=10.813999999999998, throughputMulThread=10.778
+msgSize=256000, outstanding=1, throughputMulProc=14.511999999999997, throughputMulThread=14.488999999999999
+msgSize=512000, outstanding=1, throughputMulProc=17.564999999999998, throughputMulThread=17.607000000000003
+===================3====================
+msgSize=2000, outstanding=1, throughputMulProc=1.0999999999999999, throughputMulThread=1.09
+msgSize=4000, outstanding=1, throughputMulProc=2.065, throughputMulThread=2.0500000000000003
+msgSize=8000, outstanding=1, throughputMulProc=3.62, throughputMulThread=3.6410000000000005
+msgSize=16000, outstanding=1, throughputMulProc=6.1129999999999995, throughputMulThread=6.14
+msgSize=32000, outstanding=1, throughputMulProc=5.512999999999999, throughputMulThread=5.531000000000001
+msgSize=64000, outstanding=1, throughputMulProc=7.677, throughputMulThread=7.634
+msgSize=128000, outstanding=1, throughputMulProc=10.790999999999999, throughputMulThread=10.804999999999998
+msgSize=256000, outstanding=1, throughputMulProc=14.530000000000001, throughputMulThread=14.578
+msgSize=512000, outstanding=1, throughputMulProc=17.615000000000002, throughputMulThread=17.725
+===================4====================
+msgSize=2000, outstanding=1, throughputMulProc=1.09, throughputMulThread=1.09
+msgSize=4000, outstanding=1, throughputMulProc=2.082, throughputMulThread=2.065
+msgSize=8000, outstanding=1, throughputMulProc=3.6399999999999997, throughputMulThread=3.6559999999999997
+msgSize=16000, outstanding=1, throughputMulProc=6.143, throughputMulThread=6.1209999999999996
+msgSize=32000, outstanding=1, throughputMulProc=5.517999999999999, throughputMulThread=5.523999999999999
+msgSize=64000, outstanding=1, throughputMulProc=7.636000000000001, throughputMulThread=7.677000000000001
+msgSize=128000, outstanding=1, throughputMulProc=10.856, throughputMulThread=10.783
+msgSize=256000, outstanding=1, throughputMulProc=14.560999999999998, throughputMulThread=14.556999999999999
+msgSize=512000, outstanding=1, throughputMulProc=17.626, throughputMulThread=17.654
+===================5====================
+msgSize=2000, outstanding=1, throughputMulProc=1.0999999999999999, throughputMulThread=1.09
+msgSize=4000, outstanding=1, throughputMulProc=2.064, throughputMulThread=2.0500000000000003
+msgSize=8000, outstanding=1, throughputMulProc=3.162, throughputMulThread=3.653999999999999
+msgSize=16000, outstanding=1, throughputMulProc=6.1209999999999996, throughputMulThread=6.1290000000000004
+msgSize=32000, outstanding=1, throughputMulProc=5.495000000000001, throughputMulThread=5.515999999999999
+msgSize=64000, outstanding=1, throughputMulProc=7.7, throughputMulThread=7.688999999999998
+msgSize=128000, outstanding=1, throughputMulProc=10.807, throughputMulThread=10.773
+msgSize=256000, outstanding=1, throughputMulProc=14.531, throughputMulThread=14.570999999999998
+msgSize=512000, outstanding=1, throughputMulProc=17.589999999999996, throughputMulThread=17.582
+===================6====================
+msgSize=2000, outstanding=1, throughputMulProc=1.0999999999999999, throughputMulThread=1.091
+msgSize=4000, outstanding=1, throughputMulProc=2.0629999999999997, throughputMulThread=0.0
+msgSize=8000, outstanding=1, throughputMulProc=0.0, throughputMulThread=0.0
+msgSize=16000, outstanding=1, throughputMulProc=0.0, throughputMulThread=0.0
+msgSize=32000, outstanding=1, throughputMulProc=0.0, throughputMulThread=0.0
+msgSize=64000, outstanding=1, throughputMulProc=0.0, throughputMulThread=0.0
+msgSize=128000, outstanding=1, throughputMulProc=0.0, throughputMulThread=0.0
+msgSize=256000, outstanding=1, throughputMulProc=0.0, throughputMulThread=0.0
+msgSize=512000, outstanding=1, throughputMulProc=0.0, throughputMulThread=0.0
+===================7====================
+msgSize=2000, outstanding=1, throughputMulProc=0.0, throughputMulThread=0.0
+msgSize=4000, outstanding=1, throughputMulProc=0.0, throughputMulThread=0.0
+msgSize=8000, outstanding=1, throughputMulProc=0.0, throughputMulThread=0.0
+msgSize=16000, outstanding=1, throughputMulProc=0.0, throughputMulThread=0.0
+msgSize=32000, outstanding=1, throughputMulProc=0.0, throughputMulThread=0.0
+msgSize=64000, outstanding=1, throughputMulProc=0.0, throughputMulThread=0.0
+msgSize=128000, outstanding=1, throughputMulProc=0.0, throughputMulThread=0.0
+msgSize=256000, outstanding=1, throughputMulProc=0.0, throughputMulThread=0.0
+msgSize=512000, outstanding=1, throughputMulProc=0.0, throughputMulThread=0.0
+===================8====================
+msgSize=2000, outstanding=1, throughputMulProc=0.0, throughputMulThread=0.0
+msgSize=4000, outstanding=1, throughputMulProc=0.0, throughputMulThread=0.0
+msgSize=8000, outstanding=1, throughputMulProc=0.0, throughputMulThread=0.0
+msgSize=16000, outstanding=1, throughputMulProc=0.0, throughputMulThread=0.0
+msgSize=32000, outstanding=1, throughputMulProc=0.0, throughputMulThread=0.0
+msgSize=64000, outstanding=1, throughputMulProc=0.0, throughputMulThread=0.0
+msgSize=128000, outstanding=1, throughputMulProc=0.0, throughputMulThread=0.0
+msgSize=256000, outstanding=1, throughputMulProc=0.0, throughputMulThread=0.0
+msgSize=512000, outstanding=1, throughputMulProc=0.0, throughputMulThread=0.0
+===================9====================
+msgSize=2000, outstanding=1, throughputMulProc=0.0, throughputMulThread=0.0
+msgSize=4000, outstanding=1, throughputMulProc=0.0, throughputMulThread=0.0
+msgSize=8000, outstanding=1, throughputMulProc=0.0, throughputMulThread=0.0
+msgSize=16000, outstanding=1, throughputMulProc=0.0, throughputMulThread=0.0
+msgSize=32000, outstanding=1, throughputMulProc=0.0, throughputMulThread=0.0
+msgSize=64000, outstanding=1, throughputMulProc=0.0, throughputMulThread=0.0
+msgSize=128000, outstanding=1, throughputMulProc=0.0, throughputMulThread=0.0
+msgSize=256000, outstanding=1, throughputMulProc=0.0, throughputMulThread=0.0
+msgSize=512000, outstanding=1, throughputMulProc=0.0, throughputMulThread=0.0
