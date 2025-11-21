@@ -459,11 +459,9 @@ int eTran_init(struct eTran_cfg *cfg)
     actx->proto = cfg->proto;
     actx->nr_nic_queues = cfg->nr_nic_queues;
     actx->nr_app_threads = cfg->nr_app_threads;
-#if defined(ISOLATION) || defined(ALLOCATION)
+#if defined(ALLOCATION)
     actx->tcp_type=cfg->tcp_type;
-    #ifdef ALLOCATION
     tcp_state.type=cfg->tcp_type;
-    #endif
 #endif
 
     actx->fd = socket(AF_UNIX, SOCK_STREAM, 0);
@@ -497,7 +495,7 @@ int eTran_init(struct eTran_cfg *cfg)
     req.nr_nic_queues = cfg->nr_nic_queues;
     req.nr_app_threads = cfg->nr_app_threads;
     req.queue_usage = cfg->queue_usage;
-#if defined(ISOLATION) || defined(ALLOCATION)
+#if defined(ALLOCATION)
     if (req.proto==IPPROTO_TCP)
     {
         if (cfg->tcp_type==ETRAN_TCP_LATENCY) {
@@ -745,7 +743,7 @@ void pre_main(int argc, char *argv[])
             cfg.nr_app_threads = std::stoi(nr_app_threads_env);
             cfg.nr_nic_queues = std::stoi(nr_nic_queues_env);
             cfg.queue_usage = Q_EXCLUSIVE;
-#if defined(ISOLATION) || defined (ALLOCATION)
+#if defined (ALLOCATION)
             std::cout<<"Perf Isolation enabled!"<<std::endl;
             const char* proto_env_usage = std::getenv("ETRAN_TCP_TYPE");
             // const char* proto_env_usage = "THROUGHPUT";

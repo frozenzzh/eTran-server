@@ -36,10 +36,10 @@ extern class eTranTCP *etran_tcp;
 
 //control_plane.cc
 #ifdef ALLOCATION
-extern std::vector<int> throughputCores;
-extern std::vector<int> latencyCores;
-extern std::set<int> availableCores;
-extern int cpuUseRef[MAX_CPU];
+extern std::set<int, std::greater<int>>  availableCores;
+extern std::vector<int> latUsingCores;
+extern std::vector<int> throughputUsingCores;
+extern int cpuUseRef[MAX_CPU], cpuLatUseRef[MAX_CPU];
 #endif
 
 static inline int alloc_cc_idx(uint32_t *idx)
@@ -1643,23 +1643,30 @@ void free_tcp_resources(struct app_ctx *actx)
             assert(0);
         }
         cpuUseRef[cpu]--;
-        if (cpuUseRef[cpu] < 0) {
+        if (cpuUseRef[cpu]<0) {
             std::cout<<"Error, cpuUseRef["<<cpu<<"] is negative!"<<std::endl;
             assert(0);
         }
-        if (cpuUseRef[cpu] == 0) {//当前的CPU没有被使用了，需要视情况归还
-            if (cpu>=cpuNum/2+2) {//需要归还
-                std::cout<<"Retrun CPU << "<<cpu<<std::endl;
-                if (actx->tcp_type==THROUGHPUT) {
-                    throughputCores.erase(std::find(throughputCores.begin(), throughputCores.end(), cpu));
-                } else if (actx->tcp_type==LATENCY) {
-                    latencyCores.erase(std::find(latencyCores.begin(), latencyCores.end(), cpu));
-                } else {
-                    std::cout<<"Error, wrong tcp type in free_tcp_resources!!!"<<std::endl;
-                    assert(0);
+        if (actx->tcp_type==LATENCY) {
+            cpuLatUseRef[cpu]--;
+            if (cpuLatUseRef[cpu]<0) { 
+                std::cout<<"Error, cpuLatUseRef["<<cpu<<"] is negative!"<<std::endl;
+                assert(0);
+            } else if (cpuLatUseRef[cpu]==0) {
+                latUsingCores.erase(std::find(latUsingCores.begin(), latUsingCores.end(), cpu));
+                if (cpuUseRef[cpu]>0) {//还有throughput应用在使用，需要加入throughput集合，这里micro_kernel串行接收指令并处理，所以不考虑并发问题
+                    std::cout<<"Latency Return CPU >> "<<cpu<<" to throughputUsingCores"<<std::endl;
+                    throughputUsingCores.push_back(cpu);
+                } else if (cpuUseRef[cpu]==0) {//没有应用在使用，归还
+                    std::cout<<"Latency Return CPU >> "<<cpu<<" to availableCores"<<std::endl;
+                    availableCores.insert(cpu);
                 }
             }
-            availableCores.insert(cpu);
+        } else {
+            if (cpuUseRef[cpu]==0) {//没有应用在使用，归还
+                std::cout<<"Throughput Return CPU >> "<<cpu<<" to availableCores"<<std::endl;
+                availableCores.insert(cpu);
+            }
         }
     }
     #endif

@@ -447,8 +447,7 @@ static int alloc_epoll_fd(struct eTran_epoll **ep, struct app_ctx_per_thread *tc
     return fd;
 }
 
-#if defined(ISOLATION)
-static void bind_core(struct app_ctx_per_thread *tctx)
+static void bind_core(struct app_ctx_per_thread *tctx)//这里分配的话只针对运行xdp程序的kernel，不针对app thread
 {
     int cpu_count = sysconf(_SC_NPROCESSORS_ONLN)-1;  // 获取 CPU 核心总数
 
@@ -514,9 +513,6 @@ static int alloc_socket_fd(void)
         libc_close(fd);
         return -ENOMEM;
     }
-#if defined(ISOLATION)
-    bind_core(tctx);
-#endif 
     s->fd = fd;
     s->protocol = 0;
     s->tctx = tctx;

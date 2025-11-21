@@ -98,11 +98,9 @@ struct app_ctx
 
     struct thread_bcache iobuffer;
 
-    #if defined(ISOLATION) || defined(ALLOCATION)
+    #if defined(ALLOCATION)
     int tcp_type;//TCP type 0 for Latency, 1 for Throughput
-    #ifdef ALLOCATION
     std::list<int> usedCores;
-    #endif
     #endif
 
     app_ctx() {}
