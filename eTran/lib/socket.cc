@@ -479,7 +479,6 @@ static void bind_core(struct app_ctx_per_thread *tctx)//这里分配的话只针
     // }
     // dprintf(log_fd, "thread %d, tid %d, set core afffinity succ!\n", getpid(), tctx->tid);
 }
-#endif
 
 static int alloc_socket_fd(void)
 {

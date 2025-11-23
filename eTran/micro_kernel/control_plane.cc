@@ -450,7 +450,7 @@ int get_least_loaded_cpu(const std::set<int> *candidate, int *cpuId, int *cpuOve
 //     }
 // }
 
-int getCoreRoundRobin(vector<int> *candidate, int *nxtIdx, int threshold, int *locIdx) {
+int getCoreRoundRobin(std::vector<int> *candidate, int *nxtIdx, int threshold, int *locIdx) {
     ////遍历寻找第一个利用率低于阈值的CPU并返回，如果没有的话则返回-1，并返回其相应的idx
     int retCore=-1;
     *locIdx=-1;//表示没有找到
@@ -470,6 +470,7 @@ int getCore(int type) {
     //如果是throughput的话为throughputUsingCores, availableCores
     //最终记得更新相应的计数器
     //这里暂时无法处理同时分配多个CPU的情况
+    //return 18;
     int retCore=0,loadThresh,locIdx;
     get_cpu_overhead_info();
     if (type==LATENCY) {
@@ -482,7 +483,11 @@ int getCore(int type) {
             if (retCore!=-1) {//需要将CPU从throughputUsingCores中移除，放入latUsingCores中
                 throughputUsingCores.erase(throughputUsingCores.begin()+locIdx);
                 latUsingCores.push_back(retCore);
-                nxtThroughputIdx=locIdx%throughputUsingCores.size();
+                if (throughputUsingCores.size()==0) {
+                    nxtThroughputIdx=0;
+                } else {
+                    nxtThroughputIdx=locIdx%throughputUsingCores.size();
+                }
                 nxtLatencyIdx=latUsingCores.size()-1;//定位到最后一个新加入的
             } else {//从availableCores中取出来一个
                 std::cout<<"Warning, latency type overloaded, trying to allocate a new core from availableCores"<<std::endl;
@@ -1581,13 +1586,13 @@ int thread_init(void)
     int cpuNum=sysconf(_SC_NPROCESSORS_ONLN)-1;//micro_kernel thread所在的CPU不放入池子中
     latUsingCores.clear();
     throughputUsingCores.clear();
-    avaiableCores.clear();
+    availableCores.clear();
     for (int i=0; i<cpuNum; i++) {
-        avaiableCores.insert(i);
+        availableCores.insert(i);
     }
     for (int i=0; i<MAX_CPU; i++) {
         cpuUseRef[i]=0;
-        latCpuUseRef[i]=0;
+        cpuLatUseRef[i]=0;
     }
     #endif
 

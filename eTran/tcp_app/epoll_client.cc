@@ -90,6 +90,7 @@ static inline int connection_send(unsigned int tid, struct connection *c)
             break;
         }
     }
+    usleep(2000);
     return need_epoll_out;
 }
 
